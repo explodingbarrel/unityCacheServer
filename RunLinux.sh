@@ -8,9 +8,9 @@ jsDirectory="$executableDirectory"
 # Check for arch-independent install
 MACHINE_TYPE=`uname -m`
 if test ${MACHINE_TYPE} = 'x86_64'; then
-	executableDirectory="$executableDirectory/builds/linux64"
+	executableDirectory="$executableDirectory/builds/linux64/bin"
 else
-	executableDirectory="$executableDirectory/builds/linux32"
+	executableDirectory="$executableDirectory/builds/linux32/bin"
 fi
 node="$executableDirectory/node"
 
@@ -24,4 +24,4 @@ if ! test -x "$node"; then
 fi
 
 # Launch it
-exec "$node" "$jsDirectory/CacheServer.js" $@
+exec "$node" "$jsDirectory/main.js" $@

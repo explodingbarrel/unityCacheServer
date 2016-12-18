@@ -1,2 +1,0 @@
-# unityCacheServer
-Unity Cache Server
