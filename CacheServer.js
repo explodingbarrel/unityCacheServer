@@ -717,10 +717,17 @@ function handleData (socket, data)
 
 				idx += 1;
 
-				var remoteIP = socket.remoteAddress || '<null>';
-				var remotePort = socket.remotePort || '<null>';
+				var remoteIP = socket.remoteAddress || '<nil>';
+				var remotePort = socket.remotePort || '<nil>';
 				log (DBG, "End transaction for " + socket.currentGuid + "-" + socket.currentHash + " @" + remoteIP + ":" + remotePort);
 
+				if (socket.remoteAddress === null) {
+					try {
+						log(DBG, "TODO-moko: stringify socket: " + JSON.stringify(socket));
+					} catch (e) {
+						log(DBG, "TODO-moko: stringify socket err: " + e);
+					}
+				}
 				for (var i = 0 ; i < socket.targets.length ; i++)
 				{
 					log (DBG, "Rename " + socket.targets[i].from + " to " + socket.targets[i].to);
