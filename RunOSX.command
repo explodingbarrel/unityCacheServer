@@ -6,4 +6,4 @@ executableDirectory="$(cd "${0%/*}" 2>/dev/null; echo "$PWD"/"${0##*/}")"
 executableDirectory=`dirname "$executableDirectory"`
 
 # Launch it
-exec "$executableDirectory/builds/osx/bin/node" "$executableDirectory/main.js" $@
+exec "$executableDirectory/builds/osx/bin/node"  --debug=46464 "$executableDirectory/main.js" $@
