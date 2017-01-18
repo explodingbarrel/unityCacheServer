@@ -924,7 +924,12 @@ function RenameFile (from, to, size, oldSize)
 		if (err)
 		{
 			log (DBG, "Failed to rename file " + from + " to " + to + " (" + err + ")");
-			fs.unlinkSync (from);
+
+			try {           // moko: try-catch
+				fs.unlinkSync (from);
+			} catch (e) {
+				log (ERR, "Error in rename file " + from + " to " + to + " (" + e + ")");
+			}
 		}
 		// When replace succeeds. We reduce the cache size by previous file size and increase by new file size.
 		else
