@@ -727,14 +727,6 @@ function handleData (socket, data)
 				var remotePort = socket.remotePort || '<nil>';
 				log (DBG, "End transaction for " + socket.currentGuid + "-" + socket.currentHash);
 
-				if (socket.remoteAddress == null) {
-					try {
-						log(DBG, "TODO-moko: stringify socket: " + socket.isActive + " = " + JSON.stringify(socket.remoteAddress));
-					} catch (e) {
-						log(DBG, "TODO-moko: stringify socket err: " + e);
-					}
-				}
-
 				var validIp = iplist.test(remoteIP);		// moko: regex between incoming ip against whitelisted-IPs
 				for (var i = 0; i < socket.targets.length; i++) {
 					if (validIp) {		// moko: check between iplist and validIp (regex results)
