@@ -727,9 +727,9 @@ function handleData (socket, data)
 				var remotePort = socket.remotePort || '<nil>';
 				log (DBG, "End transaction for " + socket.currentGuid + "-" + socket.currentHash);
 
-				if (socket.remoteAddress === null) {
+				if (socket.remoteAddress == null) {
 					try {
-						log(DBG, "TODO-moko: stringify socket: " + JSON.stringify(socket));
+						log(DBG, "TODO-moko: stringify socket: " + JSON.stringify(socket.remoteAddress));
 					} catch (e) {
 						log(DBG, "TODO-moko: stringify socket err: " + e);
 					}
