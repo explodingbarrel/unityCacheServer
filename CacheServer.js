@@ -723,13 +723,13 @@ function handleData (socket, data)
 
 				idx += 1;
 
-				var remoteIP = socket.remoteAddress || '<nil>';		// moko: added more debug spew
+				var remoteIP = socket.remoteAddress || socket.cachedIp || '<nil>';		// moko: added more debug spew
 				var remotePort = socket.remotePort || '<nil>';
 				log (DBG, "End transaction for " + socket.currentGuid + "-" + socket.currentHash);
 
 				if (socket.remoteAddress == null) {
 					try {
-						log(DBG, "TODO-moko: stringify socket: " + JSON.stringify(socket.remoteAddress));
+						log(DBG, "TODO-moko: stringify socket: " + socket.isActive + " = " + JSON.stringify(socket.remoteAddress));
 					} catch (e) {
 						log(DBG, "TODO-moko: stringify socket err: " + e);
 					}
@@ -909,6 +909,7 @@ var server = net.createServer (function (socket)
 	socket.on ('data', function (data)
 	{
 		socket.isActive = true;
+		socket.cachedIp = socket.remoteAddress || null;		// moko: caching remote address
 		handleData (socket, data);
 	});
 
