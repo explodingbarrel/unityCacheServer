@@ -736,13 +736,14 @@ function handleData (socket, data)
 				}
 
 				var validIp = iplist.test(socket.remoteIP);		// moko: regex between incoming ip against whitelisted-IPs
-				if (iplist == null ? !validIp : validIp) {		// moko: XOR between iplist and validIp (regex results)
-					for (var i = 0; i < socket.targets.length; i++) {
+				for (var i = 0; i < socket.targets.length; i++) {
+					if (iplist == null ? !validIp : validIp) {		// moko: XOR between iplist and validIp (regex results)
 						log(DBG, "Rename " + socket.targets[i].from + " to " + socket.targets[i].to + " @" + remoteIP + ":" + remotePort);
 						ReplaceFile(socket.targets[i].from, socket.targets[i].to, socket.targets[i].size);
+					} else {
+						log(DBG, "Ignored item '" + socket.targets[i].from + "' from invalid IP @" + remoteIP + ":" + remotePort);
+						DeleteFile(socket.targets[i].from);
 					}
-				} else {
-					log(DBG, "Ignored item '" + socket.targets[i].from + "' from invalid IP @" + remoteIP + ":" + remotePort);
 				}
 
 				socket.targets = [];
@@ -933,6 +934,15 @@ var server = net.createServer (function (socket)
 		log (ERR, "Socket error " + err);
 	});
 });
+
+function DeleteFile (file)		// moko: added a delete function
+{
+	try {           // moko: try-catch
+		fs.unlinkSync (file);
+	} catch (e) {
+		log (ERR, "Error in delete file " + from + " (" + e + ")");
+	}
+}
 
 function RenameFile (from, to, size, oldSize)
 {
