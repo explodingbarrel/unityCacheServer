@@ -76,6 +76,8 @@ var INFO = 3;
 var TEST = 4;
 var DBG = 5;
 
+LOG_LEVEL = 5;		// moko: override unity log level and spew everything
+
 function log (lvl, msg)
 {
 	if (LOG_LEVEL < lvl)
