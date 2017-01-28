@@ -116,6 +116,7 @@ var gTotalDataSize = -1;
 var maxCacheSize = 1024 * 1024 * 1024 * 50; // 50Go
 var freeCacheSizeRatio = 0.9;
 var freeCacheSizeRatioWriteFailure = 0.8;
+var iplist = null;
 
 var gFreeingSpaceLock = 0;
 
@@ -293,6 +294,7 @@ function InitCache ()
 	log (DBG, "Cache Server directory " + path.resolve (cacheDir));
 	log (DBG, "Cache Server size " + gTotalDataSize);
 	log (DBG, "Cache Server max cache size " + maxCacheSize);
+	log (DBG, "Cache Server ip whitelist " + iplist);	// moko: added ip whitelist
 
 	if (gTotalDataSize > maxCacheSize)
 		FreeSpace (GetFreeCacheSize ());
@@ -719,9 +721,9 @@ function handleData (socket, data)
 
 				idx += 1;
 
-				var remoteIP = socket.remoteAddress || '<nil>';
+				var remoteIP = socket.remoteAddress || '<nil>';		// moko: added more debug spew
 				var remotePort = socket.remotePort || '<nil>';
-				log (DBG, "End transaction for " + socket.currentGuid + "-" + socket.currentHash + " @" + remoteIP + ":" + remotePort);
+				log (DBG, "End transaction for " + socket.currentGuid + "-" + socket.currentHash);
 
 				if (socket.remoteAddress === null) {
 					try {
@@ -730,10 +732,15 @@ function handleData (socket, data)
 						log(DBG, "TODO-moko: stringify socket err: " + e);
 					}
 				}
-				for (var i = 0 ; i < socket.targets.length ; i++)
-				{
-					log (DBG, "Rename " + socket.targets[i].from + " to " + socket.targets[i].to);
-					ReplaceFile (socket.targets[i].from, socket.targets[i].to, socket.targets[i].size);
+
+				var validIp = iplist.test(socket.remoteIP);		// moko: regex between incoming ip against whitelisted-IPs
+				if (iplist == null ? !validIp : validIp) {		// moko: XOR between iplist and validIp (regex results)
+					for (var i = 0; i < socket.targets.length; i++) {
+						log(DBG, "Rename " + socket.targets[i].from + " to " + socket.targets[i].to + " @" + remoteIP + ":" + remotePort);
+						ReplaceFile(socket.targets[i].from, socket.targets[i].to, socket.targets[i].size);
+					}
+				} else {
+					log(DBG, "Ignored item '" + socket.targets[i].from + "' from invalid IP @" + remoteIP + ":" + remotePort);
 				}
 
 				socket.targets = [];
@@ -1173,4 +1180,10 @@ exports.Verify = function (a_path, a_logFn, a_fix)
 	cacheDir = a_path || cacheDir;
 
 	return VerifyCache (a_fix);
-}
+};
+
+exports.ipWhitelist = function (a_iplist)	// moko: added ip whitelist
+{
+	var ipstr = a_iplist || null;
+	iplist = new RegExp(ipstr, 'i');
+};

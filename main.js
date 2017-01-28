@@ -18,6 +18,8 @@ function ParseArguments ()
 	res.fix = false;
 	res.monitorParentProcess = 0;
 	res.logFunc = null;
+	res.iplist = null;
+
 	for (var i = 2; i<process.argv.length; i++)
 	{
 		var arg = process.argv[i];
@@ -60,14 +62,19 @@ function ParseArguments ()
 		{
 			res.logFunc = function(){};
 		}
+		else if (arg.indexOf ("--iplist") == 0)
+		{
+			res.iplist = process.argv[++i];
+		}
 		else 
 		{
 			if (arg.indexOf ("--help") != 0)
 			{
 				console.log("Unknown option: " + arg);
 			}
-			console.log ("Usage: node main.js [--port serverPort] [--path pathToCache] [--legacypath pathToCache] [--size maximumSizeOfCache] [--nolegacy] [--verify|--fix]\n" +
-				     "--port: specify the server port, only apply to new cache server, default is 8126\n" +
+			console.log ("Usage: node main.js [--port serverPort] [--path pathToCache] [--legacypath pathToCache] [--size maximumSizeOfCache] [--nolegacy] [--verify|--fix] [-iplist regex]\n" +
+				     "--iplist: regex for list of allowed whitelist ip address for writing to cache" +
+			         "--port: specify the server port, only apply to new cache server, default is 8126\n" +
 				     "--path: specify the path of the cache directory, only apply to new cache server, default is ./cache5.0\n" +
 				     "--legacypath: specify the path of the cache directory, only apply to legacy cache server, default is ./cache\n" +
 				     "--size: specify the maximum allowed size of the LRU cache for both servers. Files that have not been used recently will automatically be discarded when the cache size is exceeded\n" +
@@ -163,7 +170,8 @@ if (res.monitorParentProcess != 0)
 	monitor();	
 }
 
-cserver.Start (res.size, res.port, res.cacheDir, res.logFunc, function (res) 
+cserver.ipWhitelist(res.iplist);
+cserver.Start (res.size, res.port, res.cacheDir, res.logFunc, function (res)
 {
 	cserver.log (cserver.ERR, "Unable to start Cache Server");
 	process.exit (1);
