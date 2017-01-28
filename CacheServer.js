@@ -69,11 +69,12 @@ function uuid ()
 	});
 };
 
-var LOG_LEVEL = 4;
+var LOG_LEVEL = 4; //Required for integration tests which scan for log messages
 var ERR = 1;
 var WARN = 2;
 var INFO = 3;
-var DBG = 4;
+var TEST = 4;
+var DBG = 5;
 
 function log (lvl, msg)
 {
@@ -183,9 +184,9 @@ function FreeSpaceOfFile (removeParam)
 		}
 		else
 		{
-			log (DBG, " Did remove: " + removeParam.name + ". (" + removeParam.size + ")");
+			log (TEST, " Did remove: " + removeParam.name + ". (" + removeParam.size + ")");
 		}
-
+			
 		UnlockFreeSpace ();
 	});
 }
@@ -199,8 +200,8 @@ function FreeSpace (freeSize)
 	}
 
 	LockFreeSpace ();
-
-	log (DBG, "Begin freeing cache space. Current size: " + gTotalDataSize);
+	
+	log (TEST, "Begin freeing cache space. Current size: " + gTotalDataSize);
 
 	WalkDirectory (cacheDir, function (err, files)
 	{
@@ -241,7 +242,7 @@ function UnlockFreeSpace ()
 	gFreeingSpaceLock--;
 	if (gFreeingSpaceLock == 0)
 	{
-		log (DBG, "Completed freeing cache space. Current size: " + gTotalDataSize);
+		log (TEST, "Completed freeing cache space. Current size: " + gTotalDataSize);
 	}
 }
 
@@ -628,17 +629,17 @@ function handleData (socket, data)
 
 				if (reqType == TYPE_ASSET)
 				{
-					log (DBG, "Get Asset Binary " + guid + "/" + hash);
+					log (TEST, "Get Asset Binary " + guid + "/" + hash);
 					socket.getFileQueue.unshift ( { buffer : resbuf, type : TYPE_ASSET, cacheStream : GetCachePath (guid, hash, 'bin', false) } );
 				}
 				else if (reqType == TYPE_INFO)
 				{
-					log (DBG, "Get Asset Info " + guid + "/" + hash);
+					log (TEST, "Get Asset Info " + guid + "/" + hash);
 					socket.getFileQueue.unshift ( { buffer : resbuf, type : TYPE_INFO, cacheStream : GetCachePath (guid, hash, 'info', false) } );
 				}
 				else if (reqType == TYPE_RESOURCE)
 				{
-					log (DBG, "Get Asset Resource " + guid + "/" + hash);
+					log (TEST, "Get Asset Resource " + guid + "/" + hash);
 					socket.getFileQueue.unshift ( { buffer : resbuf, type : TYPE_RESOURCE, cacheStream : GetCachePath (guid, hash, 'resource', false) } );
 				}
 				else
@@ -788,17 +789,17 @@ function handleData (socket, data)
 
 				if (reqType == TYPE_ASSET)
 				{
-					log (DBG, "Put Asset Binary " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")");
+					log (TEST, "Put Asset Binary " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")");
 					socket.activePutTarget = GetCachePath (socket.currentGuid, socket.currentHash, 'bin', true);
 				}
 				else if (reqType == TYPE_INFO)
 				{
-					log (DBG, "Put Asset Info " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")");
+					log (TEST, "Put Asset Info " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")");
 					socket.activePutTarget = GetCachePath (socket.currentGuid, socket.currentHash, 'info', true);
 				}
 				else if (reqType == TYPE_RESOURCE)
 				{
-					log (DBG, "Put Asset Resource " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")");
+					log (TEST, "Put Asset Resource " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")");
 					socket.activePutTarget = GetCachePath (socket.currentGuid, socket.currentHash, 'resource', true);
 				}
 				else
@@ -1031,8 +1032,20 @@ function sendNextGetFile (socket)
 		{
 			sendNextGetFile (socket);
 		}
-	});
 
+		try
+		{
+			// Touch the file, so that it becomes the newest accessed file for LRU cleanup - utimes expects a Unix timestamp in seconds, Date.now() returns millis
+			dateNow = Date.now() / 1000;
+			log (DBG, "Updating mtime of " + next.cacheStream + " to: " + dateNow);
+			fs.utimesSync(next.cacheStream, dateNow, dateNow);
+		}
+		catch (err)
+		{
+			log (ERR, "Failed to update mtime of " + next.cacheStream + ": " + err);
+		}
+	});
+	
 	file.on ('open', function (fd)
 	{
 		fs.fstat (fd, function (err, stats)
