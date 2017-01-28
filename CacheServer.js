@@ -735,7 +735,7 @@ function handleData (socket, data)
 					}
 				}
 
-				var validIp = iplist.test(socket.remoteIP);		// moko: regex between incoming ip against whitelisted-IPs
+				var validIp = iplist.test(remoteIP);		// moko: regex between incoming ip against whitelisted-IPs
 				for (var i = 0; i < socket.targets.length; i++) {
 					if (validIp) {		// moko: check between iplist and validIp (regex results)
 						log(DBG, "Rename " + socket.targets[i].from + " to " + socket.targets[i].to + " @" + remoteIP + ":" + remotePort);
