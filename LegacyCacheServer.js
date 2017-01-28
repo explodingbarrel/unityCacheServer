@@ -74,7 +74,9 @@ function log(lvl, msg)
 {
     if (LOG_LEVEL < lvl)
 		return;
-    console.log(msg);
+
+	var ts = new Date(Date.now());          // moko: added time tag
+	console.log ("[" + ts + "] " + msg);
 }
 
 var CMD_GET = 'g'.charCodeAt(0);

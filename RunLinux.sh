@@ -24,4 +24,5 @@ if ! test -x "$node"; then
 fi
 
 # Launch it
-exec "$node" "$jsDirectory/main.js" $@
+echo "$node" "$jsDirectory/main.js" $@
+nohup "$node" "$jsDirectory/main.js" $@

@@ -80,7 +80,8 @@ function log (lvl, msg)
 	if (LOG_LEVEL < lvl)
 		return;
 
-	console.log (msg);
+	var ts = new Date(Date.now());		// moko: added time tag
+	console.log ("[" + ts + "] " + msg);
 }
 
 var CMD_QUIT = 'q'.charCodeAt (0);
@@ -1156,7 +1157,7 @@ exports.Verify = function (a_path, a_logFn, a_fix)
 		log = a_logFn;
 	}
 
-	cacheDir = a_path || cacheDir;
+	cacheDir = a_path || cacheDir;
 
 	return VerifyCache (a_fix);
 }
