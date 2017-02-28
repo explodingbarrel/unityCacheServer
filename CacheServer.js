@@ -534,6 +534,9 @@ function handleData (socket, data)
 		socket.pendingData = null;
 	}
 
+	var remoteIP = socket.remoteAddress || socket.cachedIp || '<nil>';		// moko: added more debug spew
+	var remotePort = socket.remotePort || '<nil>';
+
 	while (true)
 	{
 		assert (socket.pendingData == null, "pending data must be null")
@@ -633,22 +636,22 @@ function handleData (socket, data)
 
 				if (reqType == TYPE_ASSET)
 				{
-					log (TEST, "Get Asset Binary " + guid + "/" + hash);
+					log (TEST, "Get Asset Binary " + guid + "/" + hash + " @" + remoteIP + ":" + remotePort);
 					socket.getFileQueue.unshift ( { buffer : resbuf, type : TYPE_ASSET, cacheStream : GetCachePath (guid, hash, 'bin', false) } );
 				}
 				else if (reqType == TYPE_INFO)
 				{
-					log (TEST, "Get Asset Info " + guid + "/" + hash);
+					log (TEST, "Get Asset Info " + guid + "/" + hash + " @" + remoteIP + ":" + remotePort);
 					socket.getFileQueue.unshift ( { buffer : resbuf, type : TYPE_INFO, cacheStream : GetCachePath (guid, hash, 'info', false) } );
 				}
 				else if (reqType == TYPE_RESOURCE)
 				{
-					log (TEST, "Get Asset Resource " + guid + "/" + hash);
+					log (TEST, "Get Asset Resource " + guid + "/" + hash + " @" + remoteIP + ":" + remotePort);
 					socket.getFileQueue.unshift ( { buffer : resbuf, type : TYPE_RESOURCE, cacheStream : GetCachePath (guid, hash, 'resource', false) } );
 				}
 				else
 				{
-					log (ERR, "Invalid data receive");
+					log (ERR, "Invalid data receive" + " @" + remoteIP + ":" + remotePort);
 					socket.destroy ();
 					return false;
 				}
@@ -697,7 +700,7 @@ function handleData (socket, data)
 				socket.currentGuid = readHex (GUID_SIZE, data.slice (idx));
 				socket.currentHash = readHex (HASH_SIZE, data.slice (idx + GUID_SIZE));
 
-				log (DBG, "Start transaction for " + socket.currentGuid + "-" + socket.currentHash);
+				log (DBG, "Start transaction for " + socket.currentGuid + "-" + socket.currentHash + " @" + remoteIP + ":" + remotePort);
 
 				data = data.slice (idx + ID_SIZE);
 				continue;
@@ -706,7 +709,7 @@ function handleData (socket, data)
 			{
 				if (!socket.inTransaction)
 				{
-					log (ERR, "Invalid transaction isolation");
+					log (ERR, "Invalid transaction isolation" + " @" + remoteIP + ":" + remotePort);
 					socket.destroy ();
 					return false;
 				}
@@ -722,10 +725,7 @@ function handleData (socket, data)
 				}
 
 				idx += 1;
-
-				var remoteIP = socket.remoteAddress || socket.cachedIp || '<nil>';		// moko: added more debug spew
-				var remotePort = socket.remotePort || '<nil>';
-				log (DBG, "End transaction for " + socket.currentGuid + "-" + socket.currentHash);
+				log (DBG, "End transaction for " + socket.currentGuid + "-" + socket.currentHash + " @" + remoteIP + ":" + remotePort);
 
 				var validIp = iplist.test(remoteIP);		// moko: regex between incoming ip against whitelisted-IPs
 				for (var i = 0; i < socket.targets.length; i++) {
@@ -749,7 +749,7 @@ function handleData (socket, data)
 			}
 			else
 			{
-				log (ERR, "Invalid data receive");
+				log (ERR, "Invalid data receive" + " @" + remoteIP + ":" + remotePort);
 				socket.destroy ();
 				return false;
 			}
@@ -759,7 +759,7 @@ function handleData (socket, data)
 		{
 			if (!socket.inTransaction)
 			{
-				log (ERR, "Not in a transaction");
+				log (ERR, "Not in a transaction" + " @" + remoteIP + ":" + remotePort);
 				socket.destroy ();
 				return false;
 			}
@@ -791,22 +791,22 @@ function handleData (socket, data)
 
 				if (reqType == TYPE_ASSET)
 				{
-					log (TEST, "Put Asset Binary " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")");
+					log (TEST, "Put Asset Binary " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")" + " @" + remoteIP + ":" + remotePort);
 					socket.activePutTarget = GetCachePath (socket.currentGuid, socket.currentHash, 'bin', true);
 				}
 				else if (reqType == TYPE_INFO)
 				{
-					log (TEST, "Put Asset Info " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")");
+					log (TEST, "Put Asset Info " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")" + " @" + remoteIP + ":" + remotePort);
 					socket.activePutTarget = GetCachePath (socket.currentGuid, socket.currentHash, 'info', true);
 				}
 				else if (reqType == TYPE_RESOURCE)
 				{
-					log (TEST, "Put Asset Resource " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")");
+					log (TEST, "Put Asset Resource " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")" + " @" + remoteIP + ":" + remotePort);
 					socket.activePutTarget = GetCachePath (socket.currentGuid, socket.currentHash, 'resource', true);
 				}
 				else
 				{
-					log (ERR, "Invalid data receive");
+					log (ERR, "Invalid data receive" + " @" + remoteIP + ":" + remotePort);
 					socket.destroy ();
 					return false;
 				}
@@ -851,12 +851,12 @@ function handleData (socket, data)
 				var fixIt = (data[idx + 1] == OPT_FIX);
 
 				verificationNumErrors = 0;
-				log (DBG, "Cache Server integrity check ("+(fixIt?"fix it":"verify only")+")");
+				log (DBG, "Cache Server integrity check ("+(fixIt?"fix it":"verify only")+")" + " @" + remoteIP + ":" + remotePort);
 				VerifyCacheDirectory (null, cacheDir, fixIt);
 				if (fixIt)
-					log (DBG, "Cache Server integrity fix "+verificationNumErrors+" issue(s)");
+					log (DBG, "Cache Server integrity fix "+verificationNumErrors+" issue(s)" + " @" + remoteIP + ":" + remotePort);
 				else
-					log (DBG, "Cache Server integrity found "+verificationNumErrors+" error(s)");
+					log (DBG, "Cache Server integrity found "+verificationNumErrors+" error(s)" + " @" + remoteIP + ":" + remotePort);
 
 				var buf = new buffers.Buffer (CMD_SIZE + UINT64_SIZE);
 				buf[0] = CMD_INTEGRITY;
@@ -870,7 +870,7 @@ function handleData (socket, data)
 			}
 			else
 			{
-				log (ERR, "Invalid data receive");
+				log (ERR, "Invalid data receive" + " @" + remoteIP + ":" + remotePort);
 				socket.destroy ();
 				return false;
 			}
