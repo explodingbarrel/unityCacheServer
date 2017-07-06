@@ -5,22 +5,15 @@ executableDirectory=`readlink --canonicalize "$executableDirectory"`
 executableDirectory=`dirname "$executableDirectory"`
 jsDirectory="$executableDirectory"
 
-# Check for arch-independent install
-MACHINE_TYPE=`uname -m`
-if test ${MACHINE_TYPE} = 'x86_64'; then
-	executableDirectory="$executableDirectory/builds/linux64/bin"
-else
-	executableDirectory="$executableDirectory/builds/linux32/bin"
-fi
-node="$executableDirectory/node"
+node="$executableDirectory/nodejs/linux64/bin/node"
 
-# If node doesn't exist in the current directory, 
+# If node doesn't exist in the current directory,
 # fall back to system-installed version
 if ! test -x "$node"; then
-	node='/usr/bin/node'
-	if ! test -x "$node"; then
-		node='/usr/bin/nodejs'
-	fi
+    node='/usr/bin/node'
+    if ! test -x "$node"; then
+        node='/usr/bin/nodejs'
+    fi
 fi
 
 # Launch it
