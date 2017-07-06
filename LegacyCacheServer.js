@@ -297,7 +297,10 @@ function GetCachePath (guid, hash, create)
 {
 	var dir = cacheDir + "/" + hash.substring(0, 2);
 	if (create)
-		fs.mkdir (dir, 0777);
+	{
+		log(DBG, "Create directory " + dir);
+		fs.existsSync(dir) || fs.mkdirSync(dir, 0777);
+	}
 	return dir +"/"+ guid + "-" + hash;
 }
 /*
@@ -344,7 +347,7 @@ function handleData (socket, data)
 		if (!socket.protocolVersion) 
 		{
 			socket.protocolVersion = readUInt32(data);
-			console.log("Client protocol version", socket.protocolVersion);
+			log(INFO, "Client protocol version", socket.protocolVersion);
 			var buf = new buffers.Buffer(UINT_SIZE);
 			if (socket.protocolVersion == PROTOCOL_VERSION)
 			{
@@ -354,10 +357,13 @@ function handleData (socket, data)
 			}
 			else
 			{
+				log (ERR, "Bad Client protocol version");
 				writeUInt32(0, buf);
-				socket.write(buf);
+				if (socket.isActive)
+					socket.write(buf);
 				socket.end();
-				return;
+				socket.forceQuit = true;
+				return false;
 			}
 		}
 		
@@ -398,8 +404,8 @@ function handleData (socket, data)
 							socket.activePutTarget = null;
 							socket.totalFileSize = 0;
 
-							if (socket.isPaused)
-								  socket.resume();
+							if (socket.isPaused && socket.isActive)
+								socket.resume();
 						});
 					});
 				});
@@ -415,7 +421,7 @@ function handleData (socket, data)
 			// Return and wait for the next call to handleData to receive more data.
 			else
 			{
-				return;
+				return true;
 			}
 		}
 		//  Serve a file from the cache server to the client
@@ -425,7 +431,7 @@ function handleData (socket, data)
 			if (data.length < CMD_SIZE + ID_SIZE)
 			{
 				socket.pendingData = data;
-				return;
+				return true;
 			}
 			idx += 1;
 			var guid = readHex(GUID_SIZE, data.slice(idx));
@@ -452,7 +458,7 @@ function handleData (socket, data)
 			if (data.length < CMD_SIZE + LEN_SIZE + ID_SIZE)
 			{
 				socket.pendingData = data;
-				return;
+				return true;
 			}
 
 			// We have not completed writing the previous file
@@ -464,13 +470,14 @@ function handleData (socket, data)
 					var sizeMB = data.length / (1024 * 1024);
 					log(DBG, "Pausing socket for in progress file to be written in order to keep memory usage low... " + sizeMB + " mb");				
 					socket.isPaused = true;
-					socket.pause();
+					if (socket.isActive)
+						socket.pause();
 				}
 
 				// Keep the data in pending for the next handleData call
 				socket.pendingData = data;
 				
-				return;
+				return true;
 			}
 			
 			idx += 1;
@@ -489,7 +496,7 @@ function handleData (socket, data)
 				 log(ERR, "Error writing to file " + err + ". Possibly the disk is full? Please adjust --cacheSize with a more accurate maximum cache size");
 				 FreeSpace (gTotalDataSize * freeCacheSizeRatioWriteFailure);
 				 socket.destroy();
-				 return;
+				 return false;
 			});
 			socket.bytesToBeWritten = size;
 			socket.totalFileSize = size;
@@ -499,7 +506,7 @@ function handleData (socket, data)
 		}
 		
 		// We need more data to write the file completely
-		return;
+		return true;
 	}
 }
 
@@ -513,9 +520,29 @@ var server = net.createServer(function (socket)
 	socket.bytesToBeWritten = 0;
 	socket.totalFileSize = 0;
 	socket.isPaused = 0;
+	socket.isActive = true;
+	socket.forceQuit = false;
+
 	socket.on('data', function (data)
 	{
+		socket.isActive = true;
 		handleData (socket, data);
+	});
+	socket.on('close', function (had_errors)
+	{
+		log(ERR, "Socket closed");
+		socket.isActive = false;
+		var checkFunc = function () 
+		{
+			var data = new Buffer (0);
+			if (handleData (socket, data))
+			{
+				setTimeout (checkFunc, 1);
+			}
+		}
+		
+		if (!had_errors && !socket.forceQuit)
+			checkFunc ();
 	});
 	socket.on('error', function (err)
 	{
@@ -549,14 +576,28 @@ function sendNextGetFile(socket)
 		catch (err)
 		{
 			log(ERR, "Error sending file data to socket " + err);
+		}
+		finally
+		{
+			if (socket.isActive)
+			{
+				sendNextGetFile(socket);
+			}
+			else
+			{
+				log (ERR, "Socket close, close active file");
+				file.close();
+			}
 		};
-		sendNextGetFile(socket);
-		log(INFO, "not found: "+next.cacheStream);
-    }
+	}
 
 	file.on ('close', function()
 	{
-		sendNextGetFile(socket);
+		socket.activeGetFile = null;
+		if (socket.isActive)
+		{
+			sendNextGetFile(socket);
+		}
 	});
     
 	file.on('open', function(fd)
@@ -581,6 +622,7 @@ function sendNextGetFile(socket)
 				catch (err)
 				{
 					log(ERR, "Error sending file data to socket " + err);
+					file.close();
 				};
 			}
 		});
