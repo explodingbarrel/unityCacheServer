@@ -8,6 +8,7 @@ var cacheDir = "cache";
 var version = "4.6";
 var port = 8125;
 var PROTOCOL_VERSION = 255;
+var PROTOCOL_VERSION_SIZE = 2;
 
 //
 function d2h(d) {return d.toString(16);}
@@ -344,6 +345,13 @@ function handleData (socket, data)
 		var idx = 0;
 		if (!socket.protocolVersion) 
 		{
+			if (data.length < PROTOCOL_VERSION_SIZE)
+			{
+				// We need more data
+				socket.pendingData = data;
+				return false;
+			}
+
 			socket.protocolVersion = readUInt32(data);
 			log(INFO, "Client protocol version", socket.protocolVersion);
 			var buf = new buffers.Buffer(UINT_SIZE);
@@ -351,7 +359,7 @@ function handleData (socket, data)
 			{
 				writeUInt32(socket.protocolVersion, buf);
 				socket.write(buf);
-				idx += UINT_SIZE;
+				idx += PROTOCOL_VERSION_SIZE;
 			}
 			else
 			{
