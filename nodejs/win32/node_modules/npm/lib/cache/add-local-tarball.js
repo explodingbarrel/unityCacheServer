@@ -13,10 +13,10 @@ var cachedPackageRoot = require('./cached-package-root.js')
 var chownr = require('chownr')
 var inflight = require('inflight')
 var once = require('once')
-var writeStream = require('fs-write-stream-atomic')
+var writeStreamAtomic = require('fs-write-stream-atomic')
 var tempFilename = require('../utils/temp-filename.js')
 var rimraf = require('rimraf')
-var getPackageId = require('../install/get-package-id.js')
+var packageId = require('../utils/package-id.js')
 
 module.exports = addLocalTarball
 
@@ -97,7 +97,7 @@ function addTmpTarball (tgz, pkgData, shasum, cb) {
     log.verbose(
       'addTmpTarball',
       'already have metadata; skipping unpack for',
-      getPackageId(pkgData)
+      packageId(pkgData)
     )
     return addTmpTarball_(tgz, pkgData, shasum, cb)
   }
@@ -130,8 +130,8 @@ function addTmpTarball (tgz, pkgData, shasum, cb) {
           return cb(new Error('No version provided'))
         } else if (pkgData.version && data.version !== pkgData.version) {
           return cb(new Error('Invalid Package: expected ' +
-                              getPackageId(pkgData) +
-                              ' but found ' + getPackageId(data)))
+                              packageId(pkgData) +
+                              ' but found ' + packageId(data)))
         }
 
         addTmpTarball_(tgz, data, shasum, cb)
@@ -153,7 +153,6 @@ function addTmpTarball_ (tgz, data, shasum, cb) {
   getCacheStat(function (er, cs) {
     if (er) return cb(er)
     mkdir(pkg, function (er, created) {
-
       // chown starting from the first dir created by mkdirp,
       // or the root dir, if none had to be created, so that
       // we know that we get all the children.
@@ -163,11 +162,10 @@ function addTmpTarball_ (tgz, data, shasum, cb) {
 
       if (er) return cb(er)
       var read = fs.createReadStream(tgz)
-      var write = writeStream(target, { mode: npm.modes.file })
+      var write = writeStreamAtomic(target, { mode: npm.modes.file })
       var fin = cs.uid && cs.gid ? chown : done
       read.on('error', cb).pipe(write).on('error', cb).on('close', fin)
     })
-
   })
 
   function done () {

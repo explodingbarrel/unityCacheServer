@@ -8,6 +8,7 @@ var cacheDir = "cache5.0";
 var version = "5.3";
 var port = 8126;
 var PROTOCOL_VERSION = 254;
+var PROTOCOL_VERSION_MIN_SIZE = 2;
 var verificationFailed = false;
 var verificationNumErrors = 0;
 
@@ -290,6 +291,17 @@ function InitCache ()
 {
 	if (!fs.existsSync (cacheDir))
 		fs.mkdirSync (cacheDir, 0777);
+	var hexDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"];
+	for (var outer = 0; outer < hexDigits.length; outer++)
+	{
+		for (var inner = 0; inner < hexDigits.length; inner++)
+		{
+			cacheSubDir = cacheDir + "/" + hexDigits[outer] + hexDigits[inner];
+			if (!fs.existsSync (cacheSubDir))
+				fs.mkdirSync (cacheSubDir, 0777);
+		}
+	}
+
 	CheckCacheDirectory (cacheDir);
 	gTotalDataSize = GetDirectorySize (cacheDir);
 
@@ -306,8 +318,20 @@ function FixFileIfRequired(path, msg, fix)
 {
 	if (fix)
 	{
-		fs.unlinkSync (path);
-		log (DBG, msg + " File deleted.");
+		try {
+			var stat = fs.statSync(path);
+			if(stat.isDirectory()) {
+				fs.rmdirSync(path);
+				log(DBG, msg + " Directory deleted.");
+			}
+			else {
+				fs.unlinkSync(path);
+				log(DBG, msg + " File deleted.");
+			}
+		}
+		catch(err) {
+			log(ERR, err);
+		}
 	}
 	else
 	{
@@ -327,8 +351,8 @@ function ValidateFile (dir, file, fix)
 	var matches = file.match(pattern);
 	if (matches == null)
 	{
-		var path = cacheDir+"/"+dir+"/"+file;
-		var msg = "File "+path+" doesn t match valid pattern.";
+		var path = dir ? cacheDir+"/"+dir+"/"+file : cacheDir+"/"+file;
+		var msg = "File "+path+" doesn't match valid pattern.";
 		FixFileIfRequired (path, msg, fix);
 		verificationFailed = true;
 		verificationNumErrors++;
@@ -545,6 +569,13 @@ function handleData (socket, data)
 		var idx = 0;
 		if (!socket.protocolVersion)
 		{
+			if (data.length < PROTOCOL_VERSION_MIN_SIZE)
+			{
+				// We need more data
+				socket.pendingData = data;
+				return false;
+			}
+
 			socket.protocolVersion = readUInt32 (data);
 			var buf = new buffers.Buffer (UINT32_SIZE);
 			if (socket.protocolVersion == PROTOCOL_VERSION)
@@ -553,7 +584,7 @@ function handleData (socket, data)
 				writeUInt32 (socket.protocolVersion, buf);
 				if (socket.isActive)
 					socket.write (buf);
-				idx += UINT32_SIZE;
+				data = data.slice(UINT32_SIZE);
 			}
 			else
 			{
@@ -587,8 +618,15 @@ function handleData (socket, data)
 					socket.tempPath = null;
 					socket.activePutTarget = null;
 					socket.totalFileSize = 0;
-					if (socket.isActive)
+					if (socket.isActive) {
 						socket.resume();
+
+						// It's possible to have already processed a 'te' (transaction end) event before this callback is called.
+						// Call handleData again to ensure the 'te' event is re-processed now that we finished
+						// saving this file
+						if(socket.inTransaction)
+							handleData(socket, Buffer.from([]));
+					}
 				});
 				socket.activePutFile = null;
 
@@ -622,48 +660,46 @@ function handleData (socket, data)
 				return true;
 			}
 			idx += 1;
+				
+			var reqType = data[idx];
+				
+			idx += 1;
 
-			if (data[idx] == TYPE_ASSET || data[idx] == TYPE_INFO || data[idx] == TYPE_RESOURCE)
+			var guid = readHex (GUID_SIZE, data.slice (idx));
+			var hash = readHex (HASH_SIZE, data.slice (idx + GUID_SIZE));
+
+			var resbuf = new buffers.Buffer (CMD_SIZE + UINT64_SIZE + ID_SIZE);
+			data.copy (resbuf, CMD_SIZE + UINT64_SIZE, idx, idx + ID_SIZE); // copy guid + hash
+
+			if (reqType == TYPE_ASSET)
 			{
-				var reqType = data[idx];
-
-				idx += 1;
-				var guid = readHex (GUID_SIZE, data.slice (idx));
-				var hash = readHex (HASH_SIZE, data.slice (idx + GUID_SIZE));
-
-				var resbuf = new buffers.Buffer (CMD_SIZE + UINT64_SIZE + ID_SIZE);
-				data.copy (resbuf, CMD_SIZE + UINT64_SIZE, idx, idx + ID_SIZE); // copy guid + hash
-
-				if (reqType == TYPE_ASSET)
-				{
 					log (TEST, "Get Asset Binary " + guid + "/" + hash + " @" + remoteIP + ":" + remotePort);
-					socket.getFileQueue.unshift ( { buffer : resbuf, type : TYPE_ASSET, cacheStream : GetCachePath (guid, hash, 'bin', false) } );
-				}
-				else if (reqType == TYPE_INFO)
-				{
-					log (TEST, "Get Asset Info " + guid + "/" + hash + " @" + remoteIP + ":" + remotePort);
-					socket.getFileQueue.unshift ( { buffer : resbuf, type : TYPE_INFO, cacheStream : GetCachePath (guid, hash, 'info', false) } );
-				}
-				else if (reqType == TYPE_RESOURCE)
-				{
-					log (TEST, "Get Asset Resource " + guid + "/" + hash + " @" + remoteIP + ":" + remotePort);
-					socket.getFileQueue.unshift ( { buffer : resbuf, type : TYPE_RESOURCE, cacheStream : GetCachePath (guid, hash, 'resource', false) } );
-				}
-				else
-				{
-					log (ERR, "Invalid data receive" + " @" + remoteIP + ":" + remotePort);
-					socket.destroy ();
-					return false;
-				}
-
-				if (!socket.activeGetFile)
-				{
-					sendNextGetFile (socket);
-				}
-
-				data = data.slice (idx + ID_SIZE);
-				continue;
+				socket.getFileQueue.unshift ( { buffer : resbuf, type : TYPE_ASSET, cacheStream : GetCachePath (guid, hash, 'bin', false) } );
 			}
+			else if (reqType == TYPE_INFO)
+			{
+					log (TEST, "Get Asset Info " + guid + "/" + hash + " @" + remoteIP + ":" + remotePort);
+				socket.getFileQueue.unshift ( { buffer : resbuf, type : TYPE_INFO, cacheStream : GetCachePath (guid, hash, 'info', false) } );
+			}
+			else if (reqType == TYPE_RESOURCE)
+			{
+					log (TEST, "Get Asset Resource " + guid + "/" + hash + " @" + remoteIP + ":" + remotePort);
+				socket.getFileQueue.unshift ( { buffer : resbuf, type : TYPE_RESOURCE, cacheStream : GetCachePath (guid, hash, 'resource', false) } );
+			}
+			else
+			{
+					log (ERR, "Invalid data receive" + " @" + remoteIP + ":" + remotePort);
+				socket.destroy ();
+				return false;
+			}
+
+			if (!socket.activeGetFile)
+			{
+				sendNextGetFile (socket);
+			}
+
+			data = data.slice (idx + ID_SIZE);
+			continue;
 		}
 		// handle a transaction
 		else if (data[idx] == CMD_TRX)
@@ -775,60 +811,59 @@ function handleData (socket, data)
 			}
 
 			/// * We don't have enough data to start the put request. (wait for more data)
-			if (data.length < CMD_SIZE)
+			if (data.length < CMD_SIZE + UINT64_SIZE)
 			{
 				socket.pendingData = data;
 				return true;
 			}
 
 			idx += 1;
-			if (data[idx] == TYPE_ASSET || data[idx] == TYPE_INFO || data[idx] == TYPE_RESOURCE)
+			var reqType = data[idx];
+				
+			idx += 1;
+
+			var size = readUInt64 (data.slice (idx));
+
+			if (reqType == TYPE_ASSET)
 			{
-				var reqType = data[idx];
-
-				idx += 1;
-				var size = readUInt64 (data.slice (idx));
-
-				if (reqType == TYPE_ASSET)
-				{
 					log (TEST, "Put Asset Binary " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")" + " @" + remoteIP + ":" + remotePort);
-					socket.activePutTarget = GetCachePath (socket.currentGuid, socket.currentHash, 'bin', true);
-				}
-				else if (reqType == TYPE_INFO)
-				{
-					log (TEST, "Put Asset Info " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")" + " @" + remoteIP + ":" + remotePort);
-					socket.activePutTarget = GetCachePath (socket.currentGuid, socket.currentHash, 'info', true);
-				}
-				else if (reqType == TYPE_RESOURCE)
-				{
-					log (TEST, "Put Asset Resource " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")" + " @" + remoteIP + ":" + remotePort);
-					socket.activePutTarget = GetCachePath (socket.currentGuid, socket.currentHash, 'resource', true);
-				}
-				else
-				{
-					log (ERR, "Invalid data receive" + " @" + remoteIP + ":" + remotePort);
-					socket.destroy ();
-					return false;
-				}
-
-				socket.tempPath = cacheDir + "/Temp" + uuid ();
-				socket.activePutFile = fs.createWriteStream (socket.tempPath);
-
-				socket.activePutFile.on ('error', function (err)
-				{
-					// Test that this codepath works correctly
-					log (ERR, "Error writing to file " + err + ". Possibly the disk is full? Please adjust --cacheSize with a more accurate maximum cache size");
-					FreeSpace (gTotalDataSize * freeCacheSizeRatioWriteFailure);
-					socket.destroy ();
-					return false;
-				});
-				socket.bytesToBeWritten = size;
-				socket.totalFileSize = size;
-
-				data = data.slice (idx + UINT64_SIZE);
-				continue;
+				socket.activePutTarget = GetCachePath (socket.currentGuid, socket.currentHash, 'bin', true);
 			}
+			else if (reqType == TYPE_INFO)
+			{
+					log (TEST, "Put Asset Info " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")" + " @" + remoteIP + ":" + remotePort);
+				socket.activePutTarget = GetCachePath (socket.currentGuid, socket.currentHash, 'info', true);
+			}
+			else if (reqType == TYPE_RESOURCE)
+			{
+					log (TEST, "Put Asset Resource " + socket.currentGuid + "-" + socket.currentHash + " (size " + size + ")" + " @" + remoteIP + ":" + remotePort);
+				socket.activePutTarget = GetCachePath (socket.currentGuid, socket.currentHash, 'resource', true);
+			}
+			else
+			{
+					log (ERR, "Invalid data receive" + " @" + remoteIP + ":" + remotePort);
+				socket.destroy ();
+				return false;
+			}
+
+			socket.tempPath = cacheDir + "/Temp" + uuid ();
+				socket.activePutFile = fs.createWriteStream (socket.tempPath);			
+
+			socket.activePutFile.on ('error', function (err)
+			{
+				// Test that this codepath works correctly
+				log (ERR, "Error writing to file " + err + ". Possibly the disk is full? Please adjust --cacheSize with a more accurate maximum cache size");
+				FreeSpace (gTotalDataSize * freeCacheSizeRatioWriteFailure);
+				socket.destroy ();
+				return false;
+			});
+			socket.bytesToBeWritten = size;
+			socket.totalFileSize = size;
+
+			data = data.slice (idx + UINT64_SIZE);
+			continue;
 		}
+
 		// handle check integrity
 		else if (data[idx] == CMD_INTEGRITY)
 		{
