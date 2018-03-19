@@ -5,7 +5,7 @@ var buffers = require ('buffer');
 var assert = require ('assert');
 
 var cacheDir = "cache5.0";
-var version = "5.3";
+var version = "2018.1.0b9;
 var port = 8126;
 var PROTOCOL_VERSION = 254;
 var PROTOCOL_VERSION_MIN_SIZE = 2;
@@ -190,7 +190,7 @@ function FreeSpaceOfFile (removeParam)
 		{
 			log (TEST, " Did remove: " + removeParam.name + ". (" + removeParam.size + ")");
 		}
-			
+
 		UnlockFreeSpace ();
 	});
 }
@@ -204,7 +204,7 @@ function FreeSpace (freeSize)
 	}
 
 	LockFreeSpace ();
-	
+
 	log (TEST, "Begin freeing cache space. Current size: " + gTotalDataSize);
 
 	WalkDirectory (cacheDir, function (err, files)
@@ -1092,7 +1092,7 @@ function sendNextGetFile (socket)
 			log (ERR, "Failed to update mtime of " + next.cacheStream + ": " + err);
 		}
 	});
-	
+
 	file.on ('open', function (fd)
 	{
 		fs.fstat (fd, function (err, stats)
