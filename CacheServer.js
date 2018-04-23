@@ -5,7 +5,7 @@ var buffers = require ('buffer');
 var assert = require ('assert');
 
 var cacheDir = "cache5.0";
-var version = "2018.1.0b9;
+var version = "2018.1.0b9";
 var port = 8126;
 var PROTOCOL_VERSION = 254;
 var PROTOCOL_VERSION_MIN_SIZE = 2;
