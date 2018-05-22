@@ -18,4 +18,4 @@ fi
 
 # Launch it
 echo "$node" "$jsDirectory/main.js" $@
-nohup "$node" "$jsDirectory/main.js" $@
+nohup "$node" "$jsDirectory/main.js" $@ &
