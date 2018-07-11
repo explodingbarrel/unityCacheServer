@@ -29,9 +29,13 @@ function collect(val, memo) {
 const defaultCacheModule = config.get("Cache.defaultModule");
 
 const processorOptions = config.get("Cache.options.processor");
-if(Array.isArray(processorOptions.putWhitelist) && processorOptions.putWhitelist.length){
+// wchow ip white list
+if(processorOptions.putWhitelist){
     helpers.log(consts.LOG_INFO, `PUT whitelist: ${processorOptions.putWhitelist}`);
-};
+}
+// if(Array.isArray(processorOptions.putWhitelist) && processorOptions.putWhitelist.length){
+//     helpers.log(consts.LOG_INFO, `PUT whitelist: ${processorOptions.putWhitelist}`);
+// };
 
 program.description("Unity Cache Server")
     .version(VERSION)
