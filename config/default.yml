@@ -2,7 +2,7 @@ Cache:
   defaultModule: "cache_fs"
   options:
     processor:
-      putWhitelist: '192.168.56.2'
+      putWhitelist: '10\.(210\.0\.[6|7][0-9]|211\.0\.(176|119))'
     cache_ram:
       cachePath: ".cache_ram"
       pageSize: 100000000
