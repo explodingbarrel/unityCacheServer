@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 ### BEGIN INIT INFO
 # Provides: unity_cache_server
@@ -38,28 +38,38 @@ fi
 
 # Installation prefix
 # todo wchow change this to what is needed on the cache server.
-prefix="﻿/home/william/kbm-devspc/unityCacheServerr"
-CSUSER="wchow"
-
+CSUSER="william"
+# The path that is to be used for the script
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/home/william/.nvm/versions/node/v8.1.4/bin
 ################################################################################
 ## STOP EDITING HERE
 ################################################################################
 
 # The path that is to be used for the script
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-
-DAEMON="$prefix/run.sh"
 RETVAL=0
+
+dostatus() {
+echo -n "Status: "
+pid=`ps ax | grep bin/unity-cache-server | grep -v grep | awk '{print $1}'`
+if [ -n "$pid" ]; then
+echo -n "running"
+else
+echo -n "stopped"
+fi
+echo
+}
 
 start () {
 echo -n $"Starting Unity Cache Server: "
-su -l $CSUSER -c "${DAEMON}"
+/sbin/runuser $CSUSER -s /bin/bash -c "unity-cache-server -P /data/cache5.0 > /var/log/unity/unityCacheServer.log 2>&1 &"
 RETVAL=$?
 if [ $RETVAL -eq 0 ]; then
 echo_success
+dostatus
 echo
 else
 echo_failure
+dostatus
 echo
 exit 1
 fi
@@ -67,13 +77,14 @@ fi
 
 stop () {
 echo -n $"Stopping Unity Cache Server: "
-su -l $CSUSER -c "kill $(ps ax | grep CacheServer.js | grep -v grep | awk '{print $1}')"
+/sbin/runuser $CSUSER -s /bin/bash -c "kill $(ps ax | grep unity-cache-server | grep -v grep | awk '{print $1}')"
 RETVAL=$?
 if [ $RETVAL -eq 0 ]; then
 echo_success
 else
 echo_failure
 fi
+dostatus
 echo
 }
 
@@ -81,19 +92,6 @@ restart () {
 stop
 start
 }
-
-dostatus() {
-ps ax | grep unityCacheServer/main.js | grep -v grep | awk '{print $1}'
-RETVAL=$?
-echo "Status"
-if [ $RETVAL -eq 0 ]; then
-echo_success
-else
-echo_failure
-fi
-echo
-}
-
 
 # See how we were called.
 case "$1" in
@@ -104,8 +102,8 @@ stop)
 stop
 ;;
 status)
-dostatus
-;;
+dostatus 
+;; 
 restart)
 restart
 ;;
