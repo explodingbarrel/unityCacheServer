@@ -15,3 +15,5 @@ sudo chown $1 /data/cache5.0
 
 # setup init.d service file to /etc/init.d/
 sudo cp -v -f config/unityCacheServer.sh /etc/init.d/
+sudo chmod 755 /etc/init.d/
+sudo update-rc.d unityCacheServer.sh defaults
