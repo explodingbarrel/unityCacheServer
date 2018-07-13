@@ -29,7 +29,7 @@ function collect(val, memo) {
 const defaultCacheModule = config.get("Cache.defaultModule");
 
 const processorOptions = config.get("Cache.options.processor");
-// kabam-: Print out the ip white list regex.
+// kabam-wchow: Print out the ip white list regex.
 if(processorOptions.putWhitelist){
     helpers.log(consts.LOG_INFO, `PUT whitelist: ${processorOptions.putWhitelist}`);
 }
