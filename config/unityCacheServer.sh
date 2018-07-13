@@ -41,6 +41,7 @@ fi
 CSUSER="william"
 # The path that is to be used for the script
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/home/william/.nvm/versions/node/v8.1.4/bin
+SCRIPT=/home/william/kbm-devspc/unityCacheServer/run.sh
 ################################################################################
 ## STOP EDITING HERE
 ################################################################################
@@ -61,7 +62,7 @@ echo
 
 start () {
 echo -n $"Starting Unity Cache Server: "
-/sbin/runuser $CSUSER -s /bin/bash -c "unity-cache-server -P /data/cache5.0 -l 5 > /var/log/unity/unityCacheServer.log 2>&1 &"
+/sbin/runuser $CSUSER -s /bin/bash -c "$SCRIPT"
 RETVAL=$?
 if [ $RETVAL -eq 0 ]; then
 echo_success
