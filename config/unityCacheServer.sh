@@ -61,7 +61,7 @@ echo
 
 start () {
 echo -n $"Starting Unity Cache Server: "
-/sbin/runuser $CSUSER -s /bin/bash -c "unity-cache-server -P /data/cache5.0 > /var/log/unity/unityCacheServer.log 2>&1 &"
+/sbin/runuser $CSUSER -s /bin/bash -c "unity-cache-server -P /data/cache5.0 -l 5 > /var/log/unity/unityCacheServer.log 2>&1 &"
 RETVAL=$?
 if [ $RETVAL -eq 0 ]; then
 echo_success
