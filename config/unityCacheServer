@@ -1,0 +1,6 @@
+/var/log/unity/unityCacheServer.log {
+    daily
+    rotate 7
+    su unity root
+    copytruncate
+}
