@@ -19,7 +19,7 @@ Cache:
         saveUnreliableVersionArtifacts: true
         multiClient: false
     cache_fs:
-      cachePath: ".cache_fs"
+      cachePath: "/data/cache5.0"
       cleanupOptions:
         expireTimeSpan: "P30D"
         maxCacheSize: 0
