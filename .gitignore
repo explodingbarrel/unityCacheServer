@@ -1,0 +1,9 @@
+cache/
+node_modules/
+.coveralls.yml
+!lib/cache
+.nyc_output/
+coverage/
+local-production.yml
+.cache*/
+.idea/

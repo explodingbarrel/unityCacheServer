@@ -1,186 +1,157 @@
-var cserver = require ("./CacheServer.js");
-var clegserver = require ("./LegacyCacheServer.js");
-var path = require('path');
+#!/usr/bin/env node
+const helpers = require('./lib/helpers');
+helpers.initConfigDir(__dirname);
+const config = require('config');
 
-/**
- * parse cmd line argument
- * @todo should use existing module, like optimist
- *
- * @return {Object} an object containing the parsed arguments if found
- */
-function ParseArguments ()
-{
-	var res = {};
-	res.legacy = true;
-	res.legacyCacheDir = "./cache";
-	res.cacheDir = "./cache5.0";
-	res.verify = false;
-	res.fix = false;
-	res.monitorParentProcess = 0;
-	res.logFunc = null;
-	res.iplist = null;
+const { Server } = require('./lib');
+const cluster = require('cluster');
+const consts = require('./lib/constants');
+const program = require('commander');
+const ip = require('ip');
+const VERSION = require('./package.json').version;
+const fs = require('fs-extra');
+const path = require('path');
 
-	for (var i = 2; i<process.argv.length; i++)
-	{
-		var arg = process.argv[i];
-
-		if (arg.indexOf ("--size") == 0) 
-		{
-			res.size = parseInt (process.argv[++i]);
-		} 
-		else if (arg.indexOf ("--path") == 0) 
-		{
-			res.cacheDir = process.argv[++i];
-		} 
-		else if (arg.indexOf ("--legacypath") == 0) 
-		{
-			res.legacyCacheDir = process.argv[++i];
-		} 
-		else if (arg.indexOf ("--port") == 0) 
-		{
-			res.port = parseInt (process.argv[++i]);
-		}
-		else if (arg.indexOf ("--nolegacy") == 0) 
-		{
-			res.legacy = false;
-		}
-		else if (arg.indexOf ("--monitor-parent-process") == 0) 
-		{
-			res.monitorParentProcess = process.argv[++i];
-		}
-		else if (arg.indexOf ("--verify") == 0)
-		{
-			res.verify = true;
-			res.fix = false;
-		}
-		else if (arg.indexOf ("--fix") == 0)
-		{
-			res.verify = false;
-			res.fix = true;
-		}
-		else if (arg.indexOf ("--silent") == 0) 
-		{
-			res.logFunc = function(){};
-		}
-		else if (arg.indexOf ("--iplist") == 0)
-		{
-			res.iplist = process.argv[++i];
-		}
-		else 
-		{
-			if (arg.indexOf ("--help") != 0)
-			{
-				console.log("Unknown option: " + arg);
-			}
-			console.log ("Usage: node main.js [--port serverPort] [--path pathToCache] [--legacypath pathToCache] [--size maximumSizeOfCache] [--nolegacy] [--verify|--fix] [-iplist regex]\n" +
-				     "--iplist: regex for list of allowed whitelist ip address for writing to cache" +
-			         "--port: specify the server port, only apply to new cache server, default is 8126\n" +
-				     "--path: specify the path of the cache directory, only apply to new cache server, default is ./cache5.0\n" +
-				     "--legacypath: specify the path of the cache directory, only apply to legacy cache server, default is ./cache\n" +
-				     "--size: specify the maximum allowed size of the LRU cache for both servers. Files that have not been used recently will automatically be discarded when the cache size is exceeded\n" +
-				     "--nolegacy: do not start legacy cache server, otherwise legacy cache server will start on port 8125.\n" +
-						 "--verify: verify the Cache Server integrity, no fix.\n" +
-						 "--fix: fix the Cache Server integrity."
-					 );
-			process.exit (0);
-		}
-	}
-
-	return res;
+function myParseInt(val, def) {
+    val = parseInt(val);
+    return (!val && val !== 0) ? def : val;
 }
 
-var res = ParseArguments ();
-if (res.verify)
-{
-	console.log ("Verifying integrity of Cache Server directory " + res.cacheDir);
-	var numErrors = cserver.Verify (res.cacheDir, null, false)
-	if (numErrors == 0)
-	{
-		console.log ("Cache Server directory integrity verified successfully.");
-	}
-	else 
-	{
-		if (numErrors == 0)
-		{
-			console.log ("Cache Server directory contains one integrity issue.");
-		}
-		else 
-		{
-			console.log ("Cache Server directory contains "+numErrors+" integrity issues.");
-		}
-	}
-	process.exit (0);
+function zeroOrMore(val) {
+    return Math.max(0, val);
 }
 
-if (res.fix)
-{
-	console.log ("Fixing integrity of Cache Server directory " + res.cacheDir);
-	cserver.Verify (res.cacheDir, null, true)
-	console.log ("Cache Server directory integrity fixed.");
-	process.exit (0);
+function collect(val, memo) {
+    memo.push(val);
+    return memo;
 }
 
-if (res.legacy)
-{
-	if (res.port && res.port == clegserver.GetPort ())
-	{
-		console.log ("Cannot start Cache Server and Legacy Cache Server on the same port.");
-		process.exit (1);
-	}
-	
-	if (path.resolve (res.cacheDir) == path.resolve (res.legacyCacheDir))
-	{
-		console.log ("Cannot use same cache for Cache Server and Legacy Cache Server.");
-		process.exit (1);
-	}
-	
-	clegserver.Start (res.size, res.legacyCacheDir, res.logFunc, function (res) 
-	{
-		console.log ("Unable to start Legacy Cache Server");
-		process.exit (1);
-	});
+const defaultCacheModule = config.get("Cache.defaultModule");
 
-	setTimeout (function ()
-	{
-		clegserver.log (clegserver.INFO, "Legacy Cache Server version " + clegserver.GetVersion ());
-		clegserver.log (clegserver.INFO, "Legacy Cache Server on port " + clegserver.GetPort ());
-		clegserver.log (clegserver.INFO, "Legacy Cache Server is ready");
-	}, 50);
+const processorOptions = config.get("Cache.options.processor");
+if(Array.isArray(processorOptions.putWhitelist) && processorOptions.putWhitelist.length){
+    helpers.log(consts.LOG_INFO, `PUT whitelist: ${processorOptions.putWhitelist}`);
+};
+
+program.description("Unity Cache Server")
+    .version(VERSION)
+    .allowUnknownOption(true)
+    .option('-p, --port <n>', 'Specify the server port, only apply to new cache server', myParseInt, consts.DEFAULT_PORT)
+    .option('-c --cache-module [path]', 'Use cache module at specified path', defaultCacheModule)
+    .option('-P, --cache-path [path]', 'Specify the path of the cache directory')
+    .option('-l, --log-level <n>', 'Specify the level of log verbosity. Valid values are 0 (silent) through 5 (debug)', myParseInt, consts.DEFAULT_LOG_LEVEL)
+    .option('-w, --workers <n>', 'Number of worker threads to spawn', zeroOrMore, consts.DEFAULT_WORKERS)
+    .option('-m --mirror [host:port]', 'Mirror transactions to another cache server. Can be repeated for multiple mirrors', collect, [])
+    .option('--dump-config', 'Write the active configuration to the console')
+    .option('--save-config [path]', 'Write the active configuration to the specified file and exit. Defaults to ./default.yml')
+    .option('--NODE_CONFIG_DIR=<path>', 'Specify the directory to search for config files. This is equivalent to setting the NODE_CONFIG_DIR environment variable. Without this option, the built-in configuration is used.');
+
+program.parse(process.argv);
+
+if(program.saveConfig || program.dumpConfig) {
+    const configs = config.util.getConfigSources();
+    const configData = configs.length > 0 ? configs[configs.length - 1].original : '';
+
+    if(program.dumpConfig) {
+        console.log(configData);
+    }
+
+    if(program.saveConfig) {
+        let configFile = (typeof(program.saveConfig) === 'boolean') ? 'default.yml' : program.saveConfig;
+        configFile = path.resolve(configFile);
+
+        if (fs.pathExistsSync(configFile)) {
+            helpers.log(consts.LOG_ERR, `${configFile} already exists - will not overwrite.`);
+            process.exit(1);
+        }
+
+        fs.ensureDirSync(path.dirname(configFile));
+        fs.writeFileSync(configFile, configData);
+        helpers.log(consts.LOG_INFO, `config saved to ${configFile}`);
+    }
+
+    process.exit(0);
 }
 
-if (res.monitorParentProcess != 0)
-{
-	function monitor()
-	{
-		function is_running(pid) {
-			try {
-				return process.kill(pid,0)
-			}
-			catch (e) {
-				return e.code === 'EPERM'
-			}
-		}
-		if (!is_running(res.monitorParentProcess))
-		{
-			cserver.log (cserver.INFO, "monitored parent process has died");
-			process.exit (1);
-		}
-		setTimeout(monitor, 1000);
-	}
-	monitor();	
+helpers.setLogLevel(program.logLevel);
+helpers.setLogger(program.workers > 0 ? helpers.defaultClusterLogger : helpers.defaultLogger);
+
+const errHandler = function () {
+    helpers.log(consts.LOG_ERR, "Unable to start Cache Server");
+    process.exit(1);
+};
+
+const CacheModule = helpers.resolveCacheModule(program.cacheModule, __dirname);
+const Cache = new CacheModule();
+
+if(program.workers > 0 && !CacheModule.properties.clustering) {
+    program.workers = 0;
+    helpers.log(consts.LOG_INFO, `Clustering disabled, ${program.cacheModule} module does not support it.`);
 }
 
-cserver.ipWhitelist(res.iplist);
-cserver.Start (res.size, res.port, res.cacheDir, res.logFunc, function (res)
-{
-	cserver.log (cserver.ERR, "Unable to start Cache Server");
-	process.exit (1);
+let server = null;
+
+const cacheOpts = {};
+if(program.cachePath !== null) {
+    cacheOpts.cachePath = program.cachePath;
+}
+
+const getMirrors = () => new Promise((resolve, reject) => {
+    const defaultPort = consts.DEFAULT_PORT;
+    const myIp = ip.address();
+
+    const mirrors = program.mirror.map(async m => {
+        const result = await helpers.parseAndValidateAddressString(m, defaultPort);
+        if((ip.isEqual(myIp, result.host) || ip.isEqual("127.0.0.1", result.host)) && program.port === port) {
+            throw new Error(`Cannot mirror to self!`);
+        }
+
+        return result;
+    });
+
+    Promise.all(mirrors)
+        .then(m => resolve(m))
+        .catch(err => reject(err));
 });
 
-setTimeout (function ()
-{
-	// Inform integration tests that the cache server is ready
-	cserver.log (cserver.INFO, "Cache Server version " + cserver.GetVersion ());
-	cserver.log (cserver.INFO, "Cache Server on port " + cserver.GetPort ());
-	cserver.log (cserver.INFO, "Cache Server is ready");
-}, 50);
+Cache.init(cacheOpts)
+    .then(() => getMirrors())
+    .then(mirrors => {
+        const opts = {
+            port: program.port,
+            mirror: mirrors,
+            allowIpv6: config.has("Server.options.allowIpv6") ? config.get("Server.options.allowIpv6") : false
+        };
+
+        server = new Server(Cache, opts);
+
+        if(cluster.isMaster) {
+            helpers.log(consts.LOG_INFO, `Cache Server version ${VERSION}; Cache module is ${program.cacheModule}`);
+
+            if(program.workers === 0) {
+                server.start(errHandler).then(() => {
+                    helpers.log(consts.LOG_INFO, `Cache Server ready on port ${server.port}`);
+                });
+            }
+
+            for(let i = 0; i < program.workers; i++) {
+                cluster.fork();
+            }
+        }
+        else {
+            server.start(errHandler).then(() => {
+                helpers.log(consts.LOG_INFO, `Cache Server worker ${cluster.worker.id} ready on port ${server.port}`);
+            });
+        }
+    })
+    .catch(err => {
+        helpers.log(consts.LOG_ERR, err);
+        process.exit(1);
+    });
+
+process.on('SIGINT', async () => {
+    helpers.log(consts.LOG_INFO, "Shutting down...");
+    await Cache.shutdown();
+    await server.stop();
+    process.exit(0);
+});
