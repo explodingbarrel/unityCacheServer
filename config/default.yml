@@ -2,7 +2,7 @@ Cache:
   defaultModule: "cache_fs"
   options:
     processor:
-      putWhitelist: ["10.210.0.61","10.210.0.62","10.210.0.63","10.210.0.64","10.210.0.70","10.210.0.71","10.210.0.72","10.210.0.73","10.210.0.74","10.210.0.75","10.210.0.76","10.210.0.77"]
+      putWhitelist: []
     cache_ram:
       cachePath: ".cache_ram"
       pageSize: 100000000
@@ -19,7 +19,7 @@ Cache:
         saveUnreliableVersionArtifacts: true
         multiClient: false
     cache_fs:
-      cachePath: "/data/cache5.0"
+      cachePath: ".cache_fs"
       cleanupOptions:
         expireTimeSpan: "P30D"
         maxCacheSize: 0
