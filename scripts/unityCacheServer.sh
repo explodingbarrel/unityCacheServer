@@ -1,6 +1,9 @@
 #!/bin/sh
 
-export NODE_PATH=/usr/lib/node_modules
+#export NODE_PATH=/usr/lib/node_modules
+cd /opt/unityCacheServer
+npm install .
+
 basedir=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")
 
 case `uname` in
