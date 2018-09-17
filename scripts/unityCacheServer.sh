@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 #export NODE_PATH=/usr/lib/node_modules
 cd /opt/unityCacheServer
@@ -11,10 +11,10 @@ case `uname` in
 esac
 
 if [ -x "$basedir/node" ]; then
-  "$basedir/node"  "/opt/unityCacheServer/main.js" "$@" > /var/log/unityCacheServer.log 2>&1
+  "$basedir/node"  "/opt/unityCacheServer/main.js" "$@" > /var/log/unityCacheServer.log 2>&1 &
   ret=$?
 else
-  node  "/opt/unityCacheServer/main.js" "$@" > /var/log/unityCacheServer.log 2>&1
+  node  "/opt/unityCacheServer/main.js" "$@" > /var/log/unityCacheServer.log 2>&1 &
   ret=$?
 fi
 exit $ret

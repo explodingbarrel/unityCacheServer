@@ -1,0 +1,14 @@
+[Unit]
+Description=Unity Cache Server (systemd)
+Documentation=man:ls(1)
+
+[Service]
+Type=forking
+WorkingDirectory=/opt/unityCacheServer
+Environment="NODE_PATH=/usr/lib/node_modules"
+ExecStart=/bin/bash /opt/unityCacheServer/scripts/unityCacheServer.sh
+ExecStop=
+
+
+[Install]
+WantedBy=multi-user.target
