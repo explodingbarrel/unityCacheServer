@@ -3,6 +3,8 @@ Description=Unity Cache Server (systemd)
 Documentation=man:ls(1)
 
 [Service]
+User=unity
+Group=unity
 Type=forking
 WorkingDirectory=/opt/unityCacheServer
 Environment="NODE_PATH=/usr/lib/node_modules"
