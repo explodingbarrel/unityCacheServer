@@ -3,6 +3,8 @@ Description=Unity Cache Server (systemd)
 Documentation=man:ls(1)
 
 [Service]
+Restart=always
+RestartSec=3
 User=unity
 Group=unity
 Type=forking
