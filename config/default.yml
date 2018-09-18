@@ -21,8 +21,8 @@ Cache:
     cache_fs:
       cachePath: "/data/cache60_fs"
       cleanupOptions:
-        expireTimeSpan: "P30D"
-        maxCacheSize: 0
+        expireTimeSpan: "P90D"
+        maxCacheSize: 91268055040
       persistence: true
       persistenceOptions:
         autosave: true
