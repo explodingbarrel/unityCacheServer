@@ -1,5 +1,7 @@
 #!/bin/bash
 
+sudo systemctl disable unityCacheServer
+sudo systemctl stop unityCacheServer
 sudo mkdir /var/log/unity/
 sudo touch /var/log/unity/unityCacheServer.log
 sudo groupadd unitycache
