@@ -1,10 +1,9 @@
 /var/log/unity/unityCacheServer.log {
-        weekly
-        copytruncate
-        missingok
-        rotate 10
-        compress
-        delaycompress
-        notifempty
-        su unity unity
+	copytruncate
+	daily
+	dateext
+	dateformat -%Y%m%d
+	extension .log
+	missingok
+	rotate 32
 }
