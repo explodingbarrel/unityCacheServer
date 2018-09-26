@@ -6,4 +6,5 @@
 	extension .log
 	missingok
 	rotate 32
+	su unity unity
 }
