@@ -1,4 +1,4 @@
-#  Cache Server v6.1 [![Build Status](https://travis-ci.org/Unity-Technologies/unity-cache-server.svg?branch=master)](https://travis-ci.org/Unity-Technologies/unity-cache-server) [![Coverage Status](https://coveralls.io/repos/github/Unity-Technologies/unity-cache-server/badge.svg)](https://coveralls.io/github/Unity-Technologies/unity-cache-server)
+#  Cache Server v6.2 [![Build Status](https://travis-ci.org/Unity-Technologies/unity-cache-server.svg?branch=master)](https://travis-ci.org/Unity-Technologies/unity-cache-server) [![Coverage Status](https://coveralls.io/repos/github/Unity-Technologies/unity-cache-server/badge.svg)](https://coveralls.io/github/Unity-Technologies/unity-cache-server)
 > The Unity Cache Server, optimized for locally networked team environments.
 
 ## Overview
@@ -58,10 +58,10 @@ Command                          | Description
 `-p`, `--port <n>`               | The port on which the Cache Server listens. The default value is 8126.
 `-c`, `--cache-module [path]`    | The path to cache module. The Default path is 'cache_fs'.
 `-P`, `--cache-path [path]`      | The path of the cache directory.
-`-l`, `--log-level <n>`          | The level of log verbosity. Valid values are 0 (silent) through 5 (debug). The default is 3.
+`-l`, `--log-level <n>`          | The level of log verbosity. Valid values are 0 (silent) through 5 (debug). The default is 3 (info).
 `-w`, `--workers <n>`            | The number of worker threads to spawn. The default is 0.
-`-m`, `--mirror [host:port]`     | Mirror transactions to another cache server. Repeat this option ofr multiple mirrors.
-`-m`, `--monitor-parent-process <n>` | Monitor a parent process and exit if it dies.
+`-m`, `--mirror <host:port>`     | Mirror transactions to another cache server. Repeat this option for multiple mirrors.
+`-W`, `--putwhitelist <host:port>`  | Only allow PUT transactions (uploads) from the specified client address. Repeat this option for multiple addresses.
 `--dump-config`                  | Write the active configuration to the console.
 `--save-config [path]`           | Write the active configuration to the specified file and exit. Defaults to `./default.yml`.
 `--NODE_CONFIG_DIR=<path>`       | The directory to search for config files. This is equivalent to setting the `NODE_CONFIG_DIR` environment variable. If not specified, the built-in configuration is used.
@@ -76,7 +76,10 @@ By default, running `unity-cache-server` uses the built-in configuration file. T
 ### General Options
 Option                              | Default     | Description
 ----------------------------------- | ----------- | -----------
+Global.logLevel                     |3            | Logging level; override with the --log-level CLI command
 Cache.options.processor.putWhitelist|[]           | Only allow PUT transactions (uploads) from the specified array of IP addresses (string values)
+Cache.options.workers               |1            | Number of worker threads; override with the --worker CLI command
+Server.port                         |8126         | The port on which the Cache Server listens. Override with the --port CLI command
 Server.options.allowIPv6            |false        | Listen for client connections on both IPv4 and IPv6
 #### Examples (Mac/Linux)
 
