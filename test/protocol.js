@@ -15,6 +15,7 @@ const cmd = require('./test_utils').cmd;
 const clientWrite = require('./test_utils').clientWrite;
 const readStream = require('./test_utils').readStream;
 const getClientPromise = require('./test_utils').getClientPromise;
+const sinon = require('sinon');
 
 const SMALL_MIN_FILE_SIZE = 64;
 const SMALL_MAX_FILE_SIZE = 128;
@@ -24,7 +25,7 @@ const SMALL_PACKET_SIZE = 64;
 const MED_PACKET_SIZE = 1024;
 const LARGE_PACKET_SIZE = 1024 * 16;
 
-let cache, server, client;
+let cache, server, client, cmdProc;
 
 const test_modules = [
     {
@@ -74,6 +75,10 @@ describe("Protocol", () => {
                 await cache.init(module.options);
                 server = new CacheServer(cache, {port: 0});
                 await server.start(err => assert(!err, `Cache Server reported error!  ${err}`));
+
+                server.server.on('connection', socket => {
+                    cmdProc = socket.commandProcessor;
+                });
             });
 
             after(async () => {
@@ -225,6 +230,7 @@ describe("Protocol", () => {
                 });
 
                 beforeEach(async () => {
+                    this.stubs = [];
                     client = await getClientPromise(server.port);
 
                     // The Unity client always sends the version once on-connect. i.e., the version should not be pre-pended
@@ -232,11 +238,88 @@ describe("Protocol", () => {
                     await clientWrite(client, helpers.encodeInt32(consts.PROTOCOL_VERSION));
                 });
 
-                afterEach(() => client.end());
+                afterEach(() => {
+                    this.stubs.forEach(s => s.restore());
+                    client.destroy();
+                });
 
                 it("should close the socket on an invalid GET type", (done) => {
                     expectLog(client, /Unrecognized command/i, done);
                     clientWrite(client, encodeCommand('gx', self.data.guid, self.data.hash)).catch(err => done(err));
+                });
+
+                it("should close file streams if the client drops before finished reading", async () => {
+                    const resp = new CacheServerResponseTransform();
+                    client.pipe(resp);
+
+                    cmdProc._testReadStreamDestroy = true;
+
+                    const getCmd = Buffer.from(encodeCommand(cmd.getAsset, self.data.guid, self.data.hash), 'ascii');
+                    return clientWrite(client, getCmd)
+                        .then(() => {
+                            return new Promise(resolve => {
+                                cmdProc.on('_testReadStreamDestroy', () => {
+                                    assert.equal(cmdProc.readStream, null);
+                                    resolve();
+                                });
+
+                                client.destroy();
+                            });
+                        });
+                });
+
+                it("should gracefully handle an abrupt socket close when sending a file", function(done) {
+                    const resp = new CacheServerResponseTransform();
+                    resp.on('data', () => {});
+                    client.pipe(resp);
+                    const buf = Buffer.from(encodeCommand(cmd.getAsset, self.data.guid, self.data.hash) +
+                        encodeCommand(cmd.quit), 'ascii');
+                    client.write(buf, () => done());
+                    // There's no assertion here - the failure would manifest as a stuck/hung test process as a result
+                    // of a stuck async loop
+                });
+
+                it('should retrieve stored versions in the order they were are requested', function(done) {
+                    const resp = new CacheServerResponseTransform();
+                    client.pipe(resp);
+
+                    const cmds = ['+a', '+i', '-r', '+i', '+a'];
+
+                    resp.on('data', () => {});
+                    resp.on('dataEnd', () => {
+                        if(cmds.length === 0) {
+                            done();
+                        }
+                    });
+
+                    resp.on('header', header => {
+                        const nextCmd = cmds.shift();
+                        assert.strictEqual(header.cmd, nextCmd);
+                    });
+
+                    const buf = Buffer.from(
+                        encodeCommand(cmd.getAsset, self.data.guid, self.data.hash) +
+                        encodeCommand(cmd.getInfo, self.data.guid, self.data.hash) +
+                        encodeCommand(cmd.getResource, self.data.guid, Buffer.alloc(consts.HASH_SIZE, 'ascii')) +
+                        encodeCommand(cmd.getInfo, self.data.guid, self.data.hash) +
+                        encodeCommand(cmd.getAsset, self.data.guid, self.data.hash), 'ascii');
+
+                    clientWrite(client, buf, LARGE_PACKET_SIZE).catch(err => done(err));
+                });
+
+                it('should respond with not found (-) for a file that exists but throws an error when accessed', function (done) {
+                    const resp = new CacheServerResponseTransform();
+                    client.pipe(resp);
+
+                    resp.on('header', header => {
+                        assert.strictEqual(header.cmd, '-a');
+                        done();
+                    });
+
+                    self.stubs.push(sinon.stub(cache, "getFileStream").rejects());
+
+                    const buf = Buffer.from(encodeCommand(cmd.getAsset, self.data.guid, self.data.hash), 'ascii');
+                    clientWrite(client, buf);
                 });
 
                 const tests = [

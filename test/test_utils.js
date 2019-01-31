@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const consts = require('../lib/constants');
 const helpers = require('../lib/helpers');
 const net = require('net');
+const path =  require('path');
 
 const MIN_BLOB_SIZE = 64;
 const MAX_BLOB_SIZE = 2048;
@@ -73,7 +74,8 @@ exports.clientWrite = function(client, data, minPacketSize, maxPacketSize) {
     return new Promise((resolve, reject) => {
         let sentBytes = 0;
         let closed = false;
-        client.once('close', () => closed = true);
+        const closeListener = () => closed = true;
+        client.once('close', closeListener);
 
         if(typeof(minPacketSize) !== 'number') {
             minPacketSize = MIN_PACKET_SIZE;
@@ -97,6 +99,7 @@ exports.clientWrite = function(client, data, minPacketSize, maxPacketSize) {
                 sentBytes += len;
 
                 if (sentBytes === data.length) {
+                    client.removeListener('close', closeListener);
                     setTimeout(resolve, WRITE_RESOLVE_DELAY);
                 }
                 else {
@@ -119,13 +122,15 @@ exports.readStream = function(stream, size) {
     return new Promise((resolve, reject) => {
         let pos = 0;
         const buffer = Buffer.alloc(size, 0, 'ascii');
-        stream.on('data', data => {
-            if(pos + data.length <= size) {
+        stream.on('readable', function() {
+            let data;
+            while(data = this.read()) {
+                if(pos + data.length > size) {
+                    reject(new Error("Stream size exceeds buffer size allocation"));
+                }
+
                 data.copy(buffer, pos);
                 pos += data.length;
-            }
-            else {
-                reject(new Error("Stream size exceeds buffer size allocation"));
             }
         });
 
@@ -146,6 +151,26 @@ exports.getClientPromise = function(port) {
             reject(err);
         });
     });
+};
+
+exports.purgeConfig = function() {
+    function directory() {
+        if (process.env.NODE_CONFIG_DIR) {
+            return process.env.NODE_CONFIG_DIR;
+        }
+
+        return path.join(process.cwd(), 'config');
+    }
+
+    for (const fileName in require.cache) {
+        if (!fileName.includes(directory())) {
+            continue;
+        }
+
+        delete require.cache[fileName];
+    }
+
+    delete require.cache[require.resolve('config')];
 };
 
 exports.cmd = {
