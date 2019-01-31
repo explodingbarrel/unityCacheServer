@@ -200,6 +200,9 @@ describe("Unity Cache Server bootstrap", () => {
             const tmpPath = tmp.tmpNameSync();
 
             process.env.NODE_CONFIG = JSON.stringify({
+                Server: {
+                        port: 0
+                    },
                 Cache: {
                     defaultModule: "cache_fs",
                     options: {
@@ -208,6 +211,9 @@ describe("Unity Cache Server bootstrap", () => {
                             cachePath: tmpPath
                         }
                     }
+                },
+                Diagnostics: {
+                    clientRecorder: true
                 }
             });
 
@@ -251,6 +257,10 @@ describe("Unity Cache Server bootstrap", () => {
                     reject(err);
                 })
             });
+        });
+
+        it("should construct a client recorder and pass it to the server", async () => {
+            assert.ok(this._server.isRecordingClient);
         });
 
         it("should setup the server error handler", async () => {
