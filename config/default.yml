@@ -17,7 +17,7 @@ Cache:
         autosave: true
         autosaveInterval: 10000
         throttledSaves: false
-      highReliability: false
+      highReliability: true
       highReliabilityOptions:
         reliabilityThreshold: 2
         saveUnreliableVersionArtifacts: true
