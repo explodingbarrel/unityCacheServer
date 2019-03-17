@@ -1,10 +1,10 @@
 {
   "name": "unity-cache-server",
-  "version": "6.2.5-beta0",
+  "version": "6.3.0",
   "description": "Unity Cache Server",
   "main": "lib/index.js",
   "engines": {
-    "node": "^8.14.0"
+    "node": "^10.15.2"
   },
   "directories": {
     "test": "test"
@@ -18,7 +18,6 @@
     "test": "export NODE_ENV=test;nyc mocha",
     "coverage": "export NODE_ENV=test;nyc npm test && nyc report --reporter=lcov; open coverage/lcov-report/index.html",
     "start": "node main.js",
-    "profile": "node --inspect=0.0.0.0 main.js",
     "coveralls": "export NODE_ENV=test;nyc report --reporter=lcovonly && cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js && rm -rf ./coverage"
   },
   "repository": {
@@ -34,9 +33,9 @@
   "homepage": "https://github.com/Unity-Technologies/unity-cache-server#readme",
   "devDependencies": {
     "coveralls": "^3.0.2",
-    "mocha": "^5.2.0",
+    "mocha": "^6.0.2",
     "mocha-lcov-reporter": "^1.3.0",
-    "nyc": "^11.9.0",
+    "nyc": "^13.3.0",
     "sinon": "^4.2.2",
     "tmp": "0.0.33",
     "tmp-promise": "^1.0.5"

@@ -6,18 +6,61 @@ const os = require('os');
 const helpers = require('../lib/helpers');
 const consts = require('../lib/constants');
 const CacheServer = require('../lib/server/server');
-const Cache = require('../lib/cache/cache_base').CacheBase;
-const sleep = require('./test_utils').sleep;
-const cmd = require('./test_utils').cmd;
-const tmp = require('tmp');
-const fs = require('fs-extra');
-const ClientStreamRecorder = require('../lib/server/client_stream_recorder');
+const CacheBase = require('../lib/cache/cache_base').CacheBase;
+const TransactionMirror = require('../lib/server/transaction_mirror');
+const { generateCommandData, encodeCommand, clientWrite, sleep, cmd } = require('./test_utils');
+const sinon = require('sinon');
 
-const cache = new Cache();
-const server = new CacheServer(cache, {port: 0});
+const cache = new CacheBase();
 let client;
 
+describe("Server constructor", function() {
+    it("should use the default port if no port is specified in options", () => {
+        const s = new CacheServer(cache, { mirror:[] });
+        assert.strictEqual(s.port, consts.DEFAULT_PORT);
+    });
+});
+
+describe("Server mirroring", function() {
+    const server = new CacheServer(cache, {
+        port: 0,
+        mirror: [{host: "127.0.0.1", port: 8126}, {host: "1.2.3.4", port: 8126}, {host: "4.3.2.1", port: 8126}]
+    });
+
+    before(function () {
+        return server.start(err => { return Promise.reject(err); });
+    });
+
+    after(function() {
+        server.stop();
+    });
+
+    beforeEach(function (done) {
+        client = net.connect({port: server.port}, done);
+    });
+
+    afterEach(() => client.end());
+
+    it("should mirror transactions to the configured list of mirrors", async () => {
+        const spies = server.mirrors.map(m => {
+            return sinon.spy(m, "queueTransaction");
+        });
+
+        const testData = generateCommandData();
+
+        const buf = Buffer.from(helpers.encodeInt32(consts.PROTOCOL_VERSION) +
+            encodeCommand(cmd.transactionStart, testData.guid, testData.hash) +
+            encodeCommand(cmd.putAsset, null, null, testData.bin) +
+            encodeCommand(cmd.transactionEnd), 'ascii');
+
+        await clientWrite(client, buf);
+
+        spies.forEach(s => assert(s.calledOnce));
+    });
+});
+
 describe("Server common", function() {
+    const server = new CacheServer(cache, {port: 0});
 
     before(function () {
         this._defaultErrCallback = err => assert(!err, `Cache Server reported error! ${err}`);
@@ -74,7 +117,7 @@ describe("Server common", function() {
     describe("Ipv6", function() {
         const ipv6Server = new CacheServer(cache, {port: 0, allowIpv6: true});
 
-        before(function () {  
+        before(function () {
             const interfaces = os.networkInterfaces();
             let ipv6Available = false;
             Object.keys(interfaces).forEach(function (interfaceName){
@@ -88,15 +131,15 @@ describe("Server common", function() {
             if(!ipv6Available){
                 console.log("Skipping IPv6 tests because IPv6 is not available on this machine");
                 this.skip();
-            }   
+            }
 
             return ipv6Server.start(err => assert(!err, `Cache Server reported error! ${err}`));
         });
-    
+
         after(function() {
             ipv6Server.stop();
         });
-    
+
         it("should bind to ipv6 when allowed", function(done) {
             const serverAddress = ipv6Server._server.address();
             assert.strictEqual(serverAddress.family, "IPv6");
@@ -111,7 +154,7 @@ describe("Server common", function() {
         before(function () {
             return ipv4Server.start(err => assert(!err, `Cache Server reported error! ${err}`));
         });
-    
+
         after(function() {
             ipv4Server.stop();
         });
@@ -143,7 +186,7 @@ describe("Server common", function() {
 
         it("should log an error if the error code is 'EADDRINUSE", async () => {
             return new Promise((resolve, reject) => {
-                server.errCallback = e => {}
+                server.errCallback = e => {};
                 helpers.setLogger((lvl, msg) => {
                     /already in use/.test(msg) ? resolve() : reject();
                 });
@@ -151,46 +194,6 @@ describe("Server common", function() {
                 const err = new Error();
                 err.code = 'EADDRINUSE';
                 server._server.emit('error', err);
-            });
-        });
-    });
-
-    describe("Client Recorder", () => {
-        before(async () => {
-            this.tmpDir = tmp.dirSync({unsafeCleanup: true});
-
-            const csrOpts = {
-                saveDir: this.tmpDir.name,
-                bufferSize: 1024
-            };
-
-            this.csRecorder = new ClientStreamRecorder(csrOpts);
-
-            const serverOpts = {
-                port: 0,
-                clientRecorder: this.csRecorder
-            };
-
-            this.csrServer = new CacheServer(cache, serverOpts);
-            assert.ok(this.csrServer.isRecordingClient);
-            return this.csrServer.start(err => assert(!err, `Cache Server reported error! ${err}`));
-        });
-
-        after(() => {
-            this.tmpDir.removeCallback();
-            return this.csrServer.stop();
-        });
-
-        it("should use the ClientStreamRecorder if configured", (done) => {
-            client = net.connect({port: this.csrServer.port}, () => {
-
-                this.csRecorder.on('flushed', () => {
-                    assert(fs.pathExistsSync(this.csRecorder.dataPath));
-                    done();
-                });
-
-                client.write(helpers.encodeInt32(consts.PROTOCOL_VERSION));
-                client.end(cmd.quit);
             });
         });
     });
@@ -204,6 +207,8 @@ describe("Server common", function() {
                     done();
                 });
 
+                client.on('data', () => {});
+
                 client.write(helpers.encodeInt32(consts.PROTOCOL_VERSION));
                 client.end(cmd.quit);
             });
@@ -216,6 +221,8 @@ describe("Server common", function() {
                 client.on('close', function() {
                     done();
                 });
+
+                client.on('data', () => {});
 
                 client.write(helpers.encodeInt32(consts.PROTOCOL_VERSION));
                 client.end('xx');
