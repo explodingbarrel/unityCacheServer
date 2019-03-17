@@ -64,6 +64,8 @@ exports.expectLog = function(client, regex, condition, callback) {
         assert.strictEqual(match, condition);
         callback();
     });
+
+    client.on('data', () => {});
 };
 
 exports.sleep = function(ms) {
@@ -124,7 +126,7 @@ exports.readStream = function(stream, size) {
         const buffer = Buffer.alloc(size, 0, 'ascii');
         stream.on('readable', function() {
             let data;
-            while(data = this.read()) {
+            while((data = this.read()) !== null) {
                 if(pos + data.length > size) {
                     reject(new Error("Stream size exceeds buffer size allocation"));
                 }
