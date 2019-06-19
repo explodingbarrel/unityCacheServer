@@ -6,6 +6,6 @@
 	extension .log
 	missingok
 	compress
-	rotate 32
+	rotate 7
 	su unity unity
 }
