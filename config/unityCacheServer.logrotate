@@ -5,6 +5,7 @@
 	dateformat -%Y%m%d
 	extension .log
 	missingok
+	compress
 	rotate 32
 	su unity unity
 }
