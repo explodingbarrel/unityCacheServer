@@ -2,20 +2,26 @@ require('./test_init');
 
 const assert = require('assert');
 const crypto = require('crypto');
+const loki = require('lokijs');
+const tmp = require('tmp');
+const sinon = require('sinon');
+
 const helpers = require('../lib/helpers');
 const consts = require('../lib/constants');
 const CacheServer = require('../lib/server/server');
-const CacheServerResponseTransform = require('../lib/client/server_stream_processor.js');
-const loki = require('lokijs');
-const tmp = require('tmp');
-const generateCommandData = require('./test_utils').generateCommandData;
-const encodeCommand = require('./test_utils').encodeCommand;
-const expectLog = require('./test_utils').expectLog;
-const cmd = require('./test_utils').cmd;
-const clientWrite = require('./test_utils').clientWrite;
-const readStream = require('./test_utils').readStream;
-const getClientPromise = require('./test_utils').getClientPromise;
-const sinon = require('sinon');
+const ServerStreamProcessor = require('../lib/client/server_stream_processor.js');
+const CommandProcessor = require('../lib/server/command_processor');
+
+const {
+    generateCommandData,
+    encodeCommand,
+    expectLog,
+    cmd,
+    clientWrite,
+    readStream,
+    getClientPromise
+} = require('./test_utils');
+
 
 const SMALL_MIN_FILE_SIZE = 64;
 const SMALL_MAX_FILE_SIZE = 128;
@@ -77,7 +83,9 @@ describe("Protocol", () => {
                 await server.start(err => assert(!err, `Cache Server reported error!  ${err}`));
 
                 server.server.on('connection', socket => {
-                    cmdProc = socket.commandProcessor;
+                    // pipes expected to look like this: socket | ClientStreamProcessor | CommandProcessor
+                    cmdProc = socket._readableState.pipes._readableState.pipes;
+                    assert.ok(cmdProc instanceof CommandProcessor);
                 });
             });
 
@@ -230,7 +238,6 @@ describe("Protocol", () => {
                 });
 
                 beforeEach(async () => {
-                    this.stubs = [];
                     client = await getClientPromise(server.port);
 
                     // The Unity client always sends the version once on-connect. i.e., the version should not be pre-pended
@@ -239,7 +246,7 @@ describe("Protocol", () => {
                 });
 
                 afterEach(() => {
-                    this.stubs.forEach(s => s.restore());
+                    sinon.restore();
                     client.destroy();
                 });
 
@@ -249,7 +256,7 @@ describe("Protocol", () => {
                 });
 
                 it("should close file streams if the client drops before finished reading", async () => {
-                    const resp = new CacheServerResponseTransform();
+                    const resp = new ServerStreamProcessor();
                     client.pipe(resp);
 
                     cmdProc._testReadStreamDestroy = true;
@@ -269,7 +276,7 @@ describe("Protocol", () => {
                 });
 
                 it("should gracefully handle an abrupt socket close when sending a file", function(done) {
-                    const resp = new CacheServerResponseTransform();
+                    const resp = new ServerStreamProcessor();
                     resp.on('data', () => {});
                     client.pipe(resp);
                     const buf = Buffer.from(encodeCommand(cmd.getAsset, self.data.guid, self.data.hash) +
@@ -279,8 +286,8 @@ describe("Protocol", () => {
                     // of a stuck async loop
                 });
 
-                it('should retrieve stored versions in the order they were are requested', function(done) {
-                    const resp = new CacheServerResponseTransform();
+                it('should retrieve stored versions in the order they were are requested (queued)', function(done) {
+                    const resp = new ServerStreamProcessor();
                     client.pipe(resp);
 
                     const cmds = ['+a', '+i', '-r', '+i', '+a'];
@@ -288,6 +295,7 @@ describe("Protocol", () => {
                     resp.on('data', () => {});
                     resp.on('dataEnd', () => {
                         if(cmds.length === 0) {
+                            assert.strictEqual(cmdProc.sentFileCount, 4);
                             done();
                         }
                     });
@@ -304,11 +312,48 @@ describe("Protocol", () => {
                         encodeCommand(cmd.getInfo, self.data.guid, self.data.hash) +
                         encodeCommand(cmd.getAsset, self.data.guid, self.data.hash), 'ascii');
 
+
+                    // execute all commands in the same frame to simulate filling the send queue in CommandProcessor
                     clientWrite(client, buf, LARGE_PACKET_SIZE).catch(err => done(err));
                 });
 
+                it('should retrieve stored versions in the order they were are requested (async series)', function(done) {
+                    const resp = new ServerStreamProcessor();
+                    client.pipe(resp);
+
+                    const cmds = ['+a', '+i', '-r', '+i', '+a'];
+
+                    resp.on('data', () => {});
+                    resp.on('dataEnd', () => {
+                        if(cmds.length === 0) {
+                            assert.strictEqual(cmdProc.sentFileCount, 4);
+                            done();
+                        }
+                    });
+
+                    resp.on('header', header => {
+                        const nextCmd = cmds.shift();
+                        assert.strictEqual(header.cmd, nextCmd);
+                    });
+
+                    const cmdData = [
+                        encodeCommand(cmd.getAsset, self.data.guid, self.data.hash),
+                        encodeCommand(cmd.getInfo, self.data.guid, self.data.hash),
+                        encodeCommand(cmd.getResource, self.data.guid, Buffer.alloc(consts.HASH_SIZE, 'ascii')),
+                        encodeCommand(cmd.getInfo, self.data.guid, self.data.hash),
+                        encodeCommand(cmd.getAsset, self.data.guid, self.data.hash)
+                    ];
+
+                    // execute each command in series, asynchronously, to better simulate a real world server connection
+                    let next = Promise.resolve();
+                    cmdData.forEach(b => {
+                        next = next.then(() => clientWrite(client, b, LARGE_PACKET_SIZE))
+                            .catch(err => done(err));
+                    });
+                });
+
                 it('should respond with not found (-) for a file that exists but throws an error when accessed', function (done) {
-                    const resp = new CacheServerResponseTransform();
+                    const resp = new ServerStreamProcessor();
                     client.pipe(resp);
 
                     resp.on('header', header => {
@@ -316,7 +361,7 @@ describe("Protocol", () => {
                         done();
                     });
 
-                    self.stubs.push(sinon.stub(cache, "getFileStream").rejects());
+                    sinon.stub(cache, "getFileStream").rejects();
 
                     const buf = Buffer.from(encodeCommand(cmd.getAsset, self.data.guid, self.data.hash), 'ascii');
                     clientWrite(client, buf);
@@ -332,7 +377,7 @@ describe("Protocol", () => {
                 tests.forEach(function (test) {
 
                     it(`should respond with not found (-) for missing ${test.type} files (client write packet size = ${test.packetSize})`, (done) => {
-                        client.pipe(new CacheServerResponseTransform())
+                        client.pipe(new ServerStreamProcessor())
                             .on('header', function (header) {
                                 assert.strictEqual(header.cmd, '-' + test.cmd[1]);
                                 done();
@@ -349,7 +394,7 @@ describe("Protocol", () => {
                         let dataBuf;
                         let pos = 0;
 
-                        const resp = new CacheServerResponseTransform();
+                        const resp = new ServerStreamProcessor();
 
                         resp.on('header', function (header) {
                                 assert.strictEqual(header.cmd, '+' + test.cmd[1]);

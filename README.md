@@ -1,4 +1,4 @@
-#  Cache Server v6.3 [![Build Status](https://travis-ci.org/Unity-Technologies/unity-cache-server.svg?branch=master)](https://travis-ci.org/Unity-Technologies/unity-cache-server) [![Coverage Status](https://coveralls.io/repos/github/Unity-Technologies/unity-cache-server/badge.svg)](https://coveralls.io/github/Unity-Technologies/unity-cache-server)
+#  Cache Server v6.4 [![Build Status](https://travis-ci.org/Unity-Technologies/unity-cache-server.svg?branch=master)](https://travis-ci.org/Unity-Technologies/unity-cache-server) [![Coverage Status](https://coveralls.io/repos/github/Unity-Technologies/unity-cache-server/badge.svg)](https://coveralls.io/github/Unity-Technologies/unity-cache-server)
 > The Unity Cache Server, optimized for locally networked team environments.
 
 ## Overview
@@ -25,7 +25,7 @@ This open-source repository is maintained separately from the Cache Server avail
   * [Function](#function)
   * [Configuration](#configuration)
 * [Unity project Library Importer](#unity-project-library-importer)
-* [Diagnostic Tools](#diagnostic-tools)
+* [Diagnostics](#diagnostics)
 * [Contributors](#contributors)
 * [License](#license)
 
@@ -53,13 +53,14 @@ npm install github:Unity-Technologies/unity-cache-server -g
 unity-cache-server [arguments]
 ```
 
-Option                          | Description
+Option                           | Description
 -------------------------------- | -----------
 `-V`, `--version`                | Show the version number of the Cache Server.
+`-h`, `--host <address>`         | The interface on which the Cache Server listens. The default is to listen on all interfaces.
 `-p`, `--port <n>`               | The port on which the Cache Server listens. The default value is 8126.
 `-c`, `--cache-module [path]`    | The path to cache module. The Default path is 'cache_fs'.
 `-P`, `--cache-path [path]`      | The path of the cache directory.
-`-l`, `--log-level <n>`          | The level of log verbosity. Valid values are 0 (silent) through 5 (debug). The default is 3 (info).
+`-l`, `--log-level <n>`          | The level of log verbosity. Valid values are 0 (silent) through 4 (debug). The default is 3 (info).
 `-w`, `--workers <n>`            | The number of worker threads to spawn. The default is 0.
 `--diag-client-recorder`         | Record incoming client network stream to disk.
 `-m`, `--mirror <host:port>`     | Mirror transactions to another cache server. Repeat this option for multiple mirrors.
@@ -81,6 +82,7 @@ Option                              | Default     | Description
 Global.logLevel                     |3            | Logging level; override with the --log-level CLI command
 Cache.options.processor.putWhitelist|[]           | Only allow PUT transactions (uploads) from the specified array of IP addresses (string values)
 Cache.options.workers               |1            | Number of worker threads; override with the --worker CLI command
+Server.host                         |0.0.0.0      | The interface on which the Cache Server listens. Override with the --host CLI command
 Server.port                         |8126         | The port on which the Cache Server listens. Override with the --port CLI command
 Server.options.allowIPv6            |false        | Listen for client connections on both IPv4 and IPv6
 #### Examples (Mac/Linux)
@@ -169,12 +171,12 @@ Due to performance considerations, the `cache_fs` module shipped with Cache Serv
 or
 `node cleanup.js [options]`
 
-Option                          | Description
+Option                           | Description
 -------------------------------- | -----------
 -V, --version                    | Show the version number of cleanup script.
 -c --cache-module [path]         | The path to the cache module.
 -P, --cache-path [path]          | The path of the cache directory.
--l, --log-level <n>              | The level of log verbosity. Valid values are 0 (silent) through 5 (debug)
+-l, --log-level <n>              | The level of log verbosity. Valid values are 0 (silent) through 4 (debug)
 -e, --expire-time-span <timeSpan>| Override the configured file expiration timespan. Both ASP.NET style time spans (days.minutes:hours:seconds, for example '15.23:59:59') and ISO 8601 time spans (For example, 'P15DT23H59M59S') are supported.
 -s, --max-cache-size <bytes>     | Override the configured maximum cache size. Files will be removed from the cache until the max cache size is satisfied, using a Least Recently Used search. A value of 0 disables this check.
 -d, --delete                     | Delete cached files that match the configured criteria. Without this, the default behavior is to dry-run which will print diagnostic information only.
@@ -245,36 +247,19 @@ Tools are provided to quickly seed a Cache Server from a fully imported Unity pr
 * The import process connects and uploads to the target host like any other Unity client, so it should be safe in a production environment.
 * Files are skipped if any changes were detected between when the JSON data was exported and when the importer tool is executed.
 
-## Diagnostic Tools
-
-Diagnostic tools are included for debugging and performance testing.
+## Diagnostics
 
 ### Client Recorder (--diag-client-recorder)
 
-Starting up the Cache Server with the `--diag-client-recorder` option will write to disk raw data from all incoming client connections (by default to the `diagnostics/client-recordings` folder). These client data sessions are consumed by the `stream_player.js` utility.
+Starting up the Cache Server with the `--diag-client-recorder` option will write to disk raw data from all incoming client connections (by default to the `diagnostics/client-recordings` folder). Example tools and libraries for analysing recorded sessions can be found in the [ucs-diag-tools](https://github.com/Unity-Technologies/ucs-diag-utils) repository.
 
-### Client Stream Player
+### Configuration
 
-#### Usage
-
-`stream_player.js [options] <filePath> [ServerAddress]`
-
-Option                          | Description
-------------------------------- | -----------
-  -i --iterations <n>           | Number of times to send the recorded session to the server (default: 1)
-  -c --max-concurrency <n>      | Number of concurrent connections to make to the server (default: 1)
-  -d --debug-protocol           | Print protocol stream debugging data to the console.
-  -q --no-verbose               | Do not show progress and result statistics.
-  -h, --help                    | Show usage information.
-  
-#### Description
-
-The stream player can read a recorded client session(s) at `<filePath>`, optionally print the protocol stream to the console, and optionally send the protocol stream to a remote server at `[ServerAddress]` for e.g. performance load testing.
-
-#### Notes
-
-* If `<filePath>` is a directory, all files within the directory (recursively) will be read and played back. Some rudimentary validation is done on each file to detect whether or not it is a valid client session stream.
-* If `[ServerAddress]` is omitted, data will be sent to a temporary "no-op" TCP server. This is useful if you are only concerned with reading the debug protocol stream with the `-d` option.
+Option                                               | Default                         | Description
+------------------------------------------           | ------------------------------- | -----------
+Diagnostics.clientRecorder                           | false                           | Enable client network stream recording.
+Diagnostics.clientRecorderOptions.bufferSize         | 10000000                        | Size of in-memory buffer for client network stream recording. 
+Diagnostics.clientRecorderOptions.saveDir            | "diagnostics/client-recordings" | Directory where client network stream recordings will be saved. A relative directory will be relative to the server application startup directory.
 
 ## Contributors
 Contributions are welcome! Before submitting pull requests please note the Submission of Contributions section of the Apache 2.0 license.

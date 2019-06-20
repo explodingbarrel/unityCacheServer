@@ -6,18 +6,20 @@ const os = require('os');
 const helpers = require('../lib/helpers');
 const consts = require('../lib/constants');
 const CacheServer = require('../lib/server/server');
+const tmp = require('tmp');
+const ClientStreamRecorder = require('../lib/server/client_stream_recorder');
 const CacheBase = require('../lib/cache/cache_base').CacheBase;
-const TransactionMirror = require('../lib/server/transaction_mirror');
-const { generateCommandData, encodeCommand, clientWrite, sleep, cmd } = require('./test_utils');
+const { generateCommandData, encodeCommand, clientWrite, sleep, cmd, purgeConfig } = require('./test_utils');
 const sinon = require('sinon');
 
 const cache = new CacheBase();
 let client;
 
 describe("Server constructor", function() {
-    it("should use the default port if no port is specified in options", () => {
+    it("should use the default host and port if no host or port is specified in options", () => {
         const s = new CacheServer(cache, { mirror:[] });
         assert.strictEqual(s.port, consts.DEFAULT_PORT);
+        assert.strictEqual(s.host, consts.DEFAULT_HOST);
     });
 });
 
@@ -56,6 +58,25 @@ describe("Server mirroring", function() {
         await clientWrite(client, buf);
 
         spies.forEach(s => assert(s.calledOnce));
+    });
+});
+
+describe("Server startup", function() {
+    let server;
+
+    after(() => {
+        server.stop();
+    });
+
+    it("Should try to bind to the configured host",  function(done) {
+        // Validating an exception trying to bind to a bogus adapter is much simpler and more portable than trying
+        // to find a unique, valid adapter to bind to.
+        const host = "1.2.3.4";
+        server = new CacheServer(cache, {host, port: 0});
+        server.start(err => {
+            assert.strictEqual(err.address, host);
+            done();
+        });
     });
 });
 
@@ -195,6 +216,44 @@ describe("Server common", function() {
                 err.code = 'EADDRINUSE';
                 server._server.emit('error', err);
             });
+        });
+    });
+
+    describe("Client Recorder", () => {
+        before(async () => {
+            this.tmpDir = tmp.dirSync({unsafeCleanup: true});
+
+            purgeConfig();
+            process.env.NODE_CONFIG = JSON.stringify({
+                Diagnostics: {
+                    clientRecorderOptions: {
+                        saveDir: this.tmpDir.name,
+                        bufferSize: 1024
+                    }
+                }
+            });
+
+            this.csrServer = new CacheServer(cache, {clientRecorder: true});
+            return this.csrServer.start(err => assert(!err, `Cache Server reported error! ${err}`));
+        });
+
+        after(() => {
+            this.tmpDir.removeCallback();
+            return this.csrServer.stop();
+        });
+
+        it("should use the ClientStreamRecorder if configured", (done) => {
+            assert.ok(this.csrServer.isRecordingClient);
+
+            this.csrServer.server.on('connection', socket => {
+                assert.ok(Array.isArray(socket._readableState.pipes));
+                assert.ok(socket._readableState.pipes.find(x => x instanceof ClientStreamRecorder));
+            });
+
+            client = net.connect({port: this.csrServer.port}, () => {
+                client.write(helpers.encodeInt32(consts.PROTOCOL_VERSION));
+                client.end(cmd.quit);
+            }).on('data', () => {}).on('close', () => done());
         });
     });
 

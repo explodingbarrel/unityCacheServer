@@ -31,7 +31,7 @@ describe('ClientStreamRecorder', () => {
     it('should use options passed into constructor', () => {
         const opts = {
             sessionId: uuid.v4(),
-            saveDir: 'temp',
+            saveDir: this.tmpDir.name,
             bufferSize: Math.floor(Math.random() * 100000)
         };
 
@@ -40,6 +40,25 @@ describe('ClientStreamRecorder', () => {
         assert.strictEqual(csr._saveDir, opts.saveDir);
         assert.strictEqual(csr._bufferSize, opts.bufferSize);
     });
+
+    it('should not write diagnostic file if client did not send any data', async () => {
+        const opts = {
+            saveDir: this.tmpDir.name,
+            bufferSize: 1024
+        };
+
+        const csr = new ClientStreamRecorder(opts);
+        const csrWrite = promisify(csr.write).bind(csr);
+        const dataPath = csr.dataPath;
+
+        await csrWrite(Buffer.alloc(0));
+        assert(!await fs.pathExists(dataPath));
+        csr.emit('unpipe'); // triggers a buffer flush
+        await csrWrite(Buffer.alloc(1025));
+        csr.emit('unpipe');
+        assert(await fs.pathExists(dataPath));
+    });
+
 
     it('should not write to disk until the internal buffer is full', async () => {
         const opts = {
@@ -90,7 +109,7 @@ describe('ClientStreamRecorder', () => {
         });
 
         await new Promise(resolve => {
-            csr.on('flushed', () => resolve());
+            csr.on('finished', () => resolve());
         });
 
         assert(await fs.pathExists(csr.dataPath));
@@ -98,7 +117,6 @@ describe('ClientStreamRecorder', () => {
 
         // zero pad the input buffer to match expected file data
         buffer = Buffer.concat([Buffer.from('000000'), buffer]);
-
-        assert.equal(Buffer.compare(fileData, buffer), 0);
+        assert.strictEqual(Buffer.compare(fileData, buffer), 0);
     });
 });
