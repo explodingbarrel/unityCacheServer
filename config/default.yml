@@ -1,4 +1,3 @@
-loglevel: 5
 Cache:
   ## the cachePath key, if set, will override 'cachePath' within the individual module options below
   #cachePath: ".cache"
@@ -17,7 +16,7 @@ Cache:
         autosave: true
         autosaveInterval: 10000
         throttledSaves: false
-      highReliability: true
+      highReliability: false
       highReliabilityOptions:
         reliabilityThreshold: 2
         saveUnreliableVersionArtifacts: true
@@ -47,7 +46,7 @@ Server:
   options:
     allowIpv6: false
 Global:
-  logLevel: 3
+  logLevel: 5
 Diagnostics:
   clientRecorder: false
   clientRecorderOptions:
