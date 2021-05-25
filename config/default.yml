@@ -49,7 +49,7 @@ Server:
   options:
     allowIpv6: false
 Global:
-  logLevel: 5
+  logLevel: 4
 Diagnostics:
   clientRecorder: false
   clientRecorderOptions:
